@@ -2,10 +2,84 @@ package PDF::Info;
 use strict;
 use warnings;
 use Digest::MD5 qw(md5_hex);
+use Data::Dumper;
+use Carp;
 
 use base 'Exporter';
 our @EXPORT_OK = qw(parse_data parse_file);
 
+sub new {
+    my ($class,$filename) = @_;
+    open my $fh, '<', $filename or die;
+    bless {
+        fh       => $fh,
+        filename => $filename,
+        tokens   => [],
+        p        => 0,
+    }, $class;
+}
+
+sub _get_tokens {
+    my ($self) = @_;
+    return pop(@{$self->{tokens}}) if @{$self->{tokens}};
+    my $line = readline($self->{fh});
+
+}
+
+sub info {
+    my ($self) = @_;
+    return $self->{info} if defined($self->{info});
+
+    $self->{info} = {
+        links  => 0,
+        uris   => {},
+        pages  => 0,
+        words  => 0,
+        images => 0,
+        md5    => '',
+        fuzzy   => '',
+    };
+
+    my %objects;
+    my %trailer;
+
+    my $offset = 0;
+
+    while (my @toks = PDFGetPrimitive($self->{fh},\$offset) ) {
+        print Dumper(\@toks);
+        if ( $toks[0] eq 'xref' ) {
+            for(my $i=1;$i<scalar(@toks);$i++) {
+                if ( $toks[$i] eq 'trailer' ) {
+                    %trailer = ( %{$toks[++$i]}, %trailer );
+                }
+            }
+            print Dumper(\%trailer);
+            last;
+        } elsif ( $toks[2] eq 'obj' ) {
+            if ( $toks[4] eq 'stream' ) {
+                 while (my $line = readline($self->{fh}) ) {
+                     $offset += length($line);
+                     last if $line =~ /^endobj\b/;
+                 }
+            }
+        } else {
+            die "Invalid token";
+        }
+
+    }
+
+    return $self->{info};
+}
+
+sub _get_obj {
+    my ($self) = @_;
+    my %obj;
+
+    while (my $line = readline($self->{fh}) ) {
+        last if $line =~ /^endobj\b/;
+    }
+    return \%obj;
+}
 
 sub parse_file {
     my ($file) = @_;
@@ -215,6 +289,340 @@ sub dbg {
 
 sub _set_tag {
 
+}
+
+sub UnQuoteName ($)
+{
+    my $value = shift;
+    $value =~ s/#([\da-f]{2})/chr(hex($1))/ige;
+    return $value;
+}
+
+sub UnQuoteString ($)
+{
+    #
+    # Translate quoted character.
+    #
+    my $param = shift;
+    my $value;
+    if (($value) = $param =~ m/^<(.*)>$/)
+    {
+        $value =~ tr/0-9A-Fa-f//cd;
+        $value .= "0" if (length ($value) % 2);
+        $value =~ s/([\da-f]{2})/chr(hex($1))/ige;
+    }
+    elsif (($value) = $param =~ m/^\((.*)\)$/)
+    {
+        my %quoted = ("n" => "\n", "r" => "\r",
+            "t" => "\t", "b" => "\b",
+            "f" => "\f", "\\" => "\\",
+            "(" => "(", ")" => ")");
+        $value =~ s/\\([nrtbf\\()]|[0-7]{1,3})/
+            defined ($quoted{$1}) ? $quoted{$1} : chr(oct($1))/gex;
+    }
+    else
+    {
+        $value = $param;
+    }
+
+    return $value;
+}
+
+sub PDFGetPrimitive
+{
+    my $fd = shift;
+    my $offset = shift;
+
+    binmode $fd;
+    seek $fd, $$offset, 0;
+
+    my $state = 0;
+    my $buffer = '';
+    my @collector;
+    my $lastchar;
+
+    while ()
+    {
+        # File offset is positioned on start of stream.
+        last if ($state == -4);
+
+        $state = 0;
+
+        # Process last element
+        if ($#collector >= 0)
+        {
+            my $lastvalue = $collector[$#collector];
+
+            if ($lastvalue eq "R")
+            {
+                # Process references
+                if ($#collector >= 2
+                    && $collector[$#collector - 1] =~ m/\d+/
+                    && $collector[$#collector - 2] =~ m/\d+/)
+                {
+                    $collector[$#collector - 2] .= join (" ",
+                        "", @collector[$#collector - 1, $#collector]);
+                    $#collector -= 2;
+                }
+                else
+                {
+                    carp "Bad reference at offset ", $$offset;
+                }
+            }
+            elsif ($lastvalue eq "endobj")
+            {
+                # End of object
+                last;
+            }
+            elsif ($lastvalue eq "stream")
+            {
+                # End of object
+                $state = -4;
+            }
+        }
+
+        # Set state for next element
+        if ($buffer eq "[")
+        {
+            # Read array
+            $buffer = "";
+            push @collector, [ PDFGetPrimitive ($fd, $offset) ];
+        }
+        elsif ($buffer eq "<<")
+        {
+            # Read dictionary
+            $buffer = "";
+            push @collector, { PDFGetPrimitive ($fd, $offset) };
+        }
+        elsif ($buffer eq "(")
+        {
+            # Here comes a string
+            $state = 1;
+            $lastchar = "";
+        }
+        elsif ($buffer eq "<")
+        {
+            # Here comes a hex string
+            $state = -1;
+        }
+        elsif ($buffer eq ">")
+        {
+            # Wait for next > to terminate dictionary
+            $state = -2;
+        }
+        elsif ($buffer eq "%")
+        {
+            # Skip comments
+            $state = -3;
+            $buffer = "";
+        }
+        elsif ($buffer eq "]")
+        {
+            last;
+        }
+        elsif ($buffer eq ">>")
+        {
+            last;
+        }
+
+        # Read next item
+        while (read ($fd, $_, 1))
+        {
+            $$offset++;
+
+            if ($state == 0)
+            {
+                # Normal mode
+                if (m/[^\x00-\x20\x7f-\xff%()\[\]<>\/]/)
+                {
+                    # Normal character inside a name or number
+                    $buffer .= $_;
+                }
+                elsif (m/[\/\(\[\]\<\>%]/)
+                {
+                    if ($buffer ne "")
+                    {
+                        # A new item starts
+                        if ($buffer =~ m/^\//)
+                        {
+                            push @collector, UnQuoteName ($buffer);
+                        }
+                        else
+                        {
+                            push @collector, $buffer;
+                        }
+                    }
+                    $buffer = $_;
+                    last;
+                }
+                elsif (m/\s/)
+                {
+                    # All kind of whitespaces are ignored
+                    if ($buffer ne "")
+                    {
+                        # The old item is done starts
+                        if ($buffer =~ m/^\//)
+                        {
+                            push @collector, UnQuoteName ($buffer);
+                        }
+                        else
+                        {
+                            push @collector, $buffer;
+                        }
+                        $buffer = "";
+                        last;
+                    }
+                }
+                else
+                {
+                    # Strange character. Should not exist.
+                    # Complain and move on.
+                    carp "Strange character '", $_, "' at offset ",
+                        $$offset, " in mode ", $state, " detected";
+                    $buffer .= $_;
+                }
+            }
+            elsif ($state > 0)
+            {
+                # We have a string
+
+                if ($lastchar =~ m/\\[\r\n]+/ && m/[^\r\n]/)
+                {
+                    # Clean up after line continuation
+                    $lastchar = "";
+                }
+
+                if ($lastchar =~ m/\\[\r\n]*/)
+                {
+                    # Process character after backslash
+                    if (m/[\r\n]/)
+                    {
+                        # end of line
+                        $lastchar .= $_;
+                    }
+                    else
+                    {
+                        # Just a quote
+                        $buffer .= $lastchar . $_;
+                        $lastchar = "";
+                    }
+                }
+                else
+                {
+                    if ($_ eq "\\")
+                    {
+                        # Quoted string starts
+                        $lastchar = $_;
+                    }
+                    elsif ($_ eq "(")
+                    {
+                        # Count braces
+                        $buffer .= $_;
+                        $state ++;
+                    }
+                    elsif ($_ eq ")")
+                    {
+                        # End of string
+                        $buffer .= $_;
+                        unless (-- $state)
+                        {
+                            push @collector, $buffer;
+                            $buffer = "";
+                            last;
+                        }
+                    }
+                    else
+                    {
+                        $buffer .= $_;
+                    }
+                }
+            }
+            elsif ($state == -1)
+            {
+                if (m/[0-9a-f\s]/i)
+                {
+                    # Hex character
+                    $buffer .= $_;
+                }
+                elsif ($_ eq ">")
+                {
+                    # End of string
+                    $buffer .= $_;
+                    push @collector, $buffer;
+                    $buffer = "";
+                    last;
+                }
+                elsif ($_ eq "<" && $buffer eq "<")
+                {
+                    # This is not a string, but a dictionary instead
+                    $buffer .= $_;
+                    last;
+                }
+                else
+                {
+                    # Should not be there. Complain and add it to the $buffer
+                    carp "Bad character '", $_ , "' in hex string";
+                    $buffer .= $_;
+                }
+            }
+            elsif ($state == -2)
+            {
+                # Wait for second > to terminate dictionary
+
+                # Some sanity checks
+                carp "Character '", $_, "' appeared while waiting for '>'"
+                    if ($_ ne ">");
+                carp "Buffer contains '", $buffer, "' and not '>'"
+                    if ($buffer ne ">");
+
+                $buffer = ">>";
+                last;
+            }
+            elsif ($state == -3)
+            {
+                # Skip comments;
+                last if (m/[\r\n]/);
+            }
+            elsif ($state == -4)
+            {
+                # Wait for newline to start stream
+
+                if ($_ eq "\n")
+                {
+                    # Some sanity checks
+                    carp "Text '", $buffer,
+                        "' appeared while waiting for start of stream"
+                        if ($buffer ne "");
+
+                    $buffer = "";
+                    last;
+                }
+                elsif (m/\S/)
+                {
+                    $buffer .= $_;
+                }
+            }
+            else
+            {
+                # Unhandled status. Complain and reset
+                carp "Unhandled status ", $state;
+            }
+        }
+        if ($_ eq "")
+        {
+            # Unhandled status. Complain and reset
+            carp "Premature end of file reached";
+
+            if ($buffer ne "")
+            {
+                push @collector, $buffer;
+                $buffer = "";
+            }
+            last;
+        }
+    }
+
+    return @collector;
 }
 
 1;
