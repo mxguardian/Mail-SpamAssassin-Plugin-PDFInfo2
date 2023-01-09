@@ -63,7 +63,11 @@ plan tests => scalar(@tests);
 
 sub parse_file {
     my ($filename) = @_;
-    my $pdf = PDF::Info->new($filename);
+    open my $fh, '<', $filename or die;
+    local $/ = undef;
+    my $data = <$fh>;
+    close $fh;
+    my $pdf = PDF::Info->new($data);
     return $pdf->info;
 }
 

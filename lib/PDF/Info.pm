@@ -9,21 +9,16 @@ use base 'Exporter';
 our @EXPORT_OK = qw(parse_data parse_file);
 
 sub new {
-    my ($class,$filename) = @_;
-    open my $fh, '<', $filename or die;
+    my ($class,$data) = @_;
+
+    $data =~ /^%PDF\-(\d\.\d)/ or carp("PDF magic header not found");
+
     bless {
-        fh       => $fh,
-        filename => $filename,
-        tokens   => [],
-        p        => 0,
+        data    => $data,
+        version => $1,
+        xref    => {},
+        trailer => {}
     }, $class;
-}
-
-sub _get_tokens {
-    my ($self) = @_;
-    return pop(@{$self->{tokens}}) if @{$self->{tokens}};
-    my $line = readline($self->{fh});
-
 }
 
 sub info {
@@ -37,57 +32,165 @@ sub info {
         words  => 0,
         images => 0,
         md5    => '',
-        fuzzy   => '',
+        fuzzy  => '',
     };
 
-    my %objects;
-    my %trailer;
+    $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
 
-    my $offset = 0;
+    $self->_parse_xref($1);
 
-    while (my @toks = PDFGetPrimitive($self->{fh},\$offset) ) {
-        print Dumper(\@toks);
-        if ( $toks[0] eq 'xref' ) {
-            for(my $i=1;$i<scalar(@toks);$i++) {
-                if ( $toks[$i] eq 'trailer' ) {
-                    %trailer = ( %{$toks[++$i]}, %trailer );
-                }
-            }
-            print Dumper(\%trailer);
-            last;
-        } elsif ( $toks[2] eq 'obj' ) {
-            if ( $toks[4] eq 'stream' ) {
-                 while (my $line = readline($self->{fh}) ) {
-                     $offset += length($line);
-                     last if $line =~ /^endobj\b/;
-                 }
-            }
-        } else {
-            die "Invalid token";
-        }
+    $self->{catalog} = $self->_get_obj($self->{trailer}->{'/Root'});
 
-    }
+    $self->{pages} = $self->_get_obj($self->{catalog}->{'/Pages'});
+
+    $self->{info}->{pages} = $self->{pages}->{'/Count'};
+
+    $self->_parse_tree($self->{catalog}->{'/Pages'});
 
     return $self->{info};
+
+}
+
+sub _parse_xref {
+    my ($self,$pos) = @_;
+
+    pos($self->{data}) = $pos;
+
+    $self->{data} =~ /\G\s*xref\s+/g or die "xref not found";
+
+    while ($self->{data} =~ /\G(\d+) (\d+)\s+/) {
+        pos($self->{data}) = $+[0]; # advance the pointer
+        my ($start,$count) = ($1,$2);
+        print "xref $start $count\n";
+        for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
+            $self->{data} =~ /\G(\d+) (\d+) (f|n)\s+/g or die "Invalid xref entry";
+            # print "$1 $2 $3\n";
+            next unless $3 eq 'n';
+            my ($offset,$gen) = ($1+0,$2+0);
+            my $key = "$i $gen R";
+            print "$key = $offset\n";
+            $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
+        }
+    }
+
+    $self->{data} =~ /\G\s*trailer\s+/g or die "trailer not found";
+
+    my $trailer = $self->_get_dict();
+    $self->{trailer} = {
+        %{$trailer},
+        %{$self->{trailer}}
+    };
+
+    if ( defined($trailer->{'/Prev'}) ) {
+        $self->_parse_xref($trailer->{'/Prev'});
+    }
+
+}
+
+sub _parse_tree {
+    my ($self,$ref) = @_;
+
+    my $node = $self->_get_obj($ref);
+    print Dumper($node);
+
+    if ( $node->{'/Type'} eq '/Pages' ) {
+        foreach my $kid (@{$node->{'/Kids'}}) {
+            $self->_parse_tree($kid);
+        }
+        return;
+    }
+
+    $node->{'/Type'} eq '/Page' or die "Unexpected page type";
+
+    print "Page\n";
+
+}
+
+sub _get_string {
+    my ($self) = @_;
+
+    $self->{data} =~ /\G\s*\(/g or die "string not found";
+
+    $self->{data} =~ /\G(.*?)(?<!\\)\)/g or die "Invalid string";
+    return $1;
+}
+
+sub _get_hex_string {
+    my ($self) = @_;
+
+    $self->{data} =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string";
+    return $1;
+}
+
+sub _get_array {
+    my ($self) = @_;
+    my @array;
+
+    $self->{data} =~ /\G\s*\[/g or die "array not found";
+
+    while ($_ = $self->_get_primitive()) {
+        last if $_ eq ']';
+        push(@array,$_);
+    }
+
+    return \@array;
+}
+
+sub _get_dict {
+    my ($self) = @_;
+
+    my @array;
+
+    $self->{data} =~ /\G\s*<</g or die "dict not found";
+
+    while ($_ = $self->_get_primitive()) {
+        last if $_ eq '>>';
+        push(@array,$_);
+    }
+
+    my %dict = @array;
+
+    if ( $self->{data} =~ /\G\s*stream\r?\n/ ) {
+        $dict{_stream} = $+[0];
+    }
+
+    return \%dict;
+
 }
 
 sub _get_obj {
-    my ($self) = @_;
-    my %obj;
+    my ($self,$ref) = @_;
 
-    while (my $line = readline($self->{fh}) ) {
-        last if $line =~ /^endobj\b/;
-    }
-    return \%obj;
+    return undef unless defined($self->{xref}->{$ref});
+
+    pos($self->{data}) = $self->{xref}->{$ref};
+    $self->{data} =~ /\G\s*(\d+ \d+) obj\s*/g or die "object not found";
+
+    return $self->_get_primitive();
 }
 
-sub parse_file {
-    my ($file) = @_;
-    open my $fh, '<', $file or die;
-    local $/ = undef;
-    my $data = <$fh>;
-    close $fh;
-    return parse_data($data);
+sub _get_primitive {
+    my ($self) = @_;
+
+    $self->{data} =~ /\G\s*(\/\w+|<{1,2}|>>|\[|\]|\(|\d+( \d+ R)?|true|false)/ or die "Unknown primitive: ".substr($self->{data},pos($self->{data}),20);
+    if ( $1 eq '<<' ) {
+        my $dict = $self->_get_dict();
+        return $dict;
+    }
+    if ( $1 eq '(' ) {
+        return $self->_get_string();
+    }
+    if ( $1 eq '<' ) {
+        return $self->_get_hex_string();
+    }
+    if ( $1 eq '[' ) {
+        return $self->_get_array();
+    }
+
+    pos($self->{data}) = $+[0];
+
+    return $1;
+
 }
 
 sub parse_data {
@@ -101,9 +204,6 @@ sub parse_data {
         md5    => '',
         fuzzy   => '',
     );
-
-    # Remove UTF-8 BOM
-    $data =~ s/^\xef\xbb\xbf//;
 
     # Search magic in first 1024 bytes
     if ($data !~ /^.{0,1024}\%PDF\-(\d\.\d)/s) {
@@ -122,6 +222,19 @@ sub parse_data {
 
     my %uris;
     my $pms = {};
+
+
+    my %objects;
+    while ($data =~ m/\b(\d+)\s+(\d+)\s*obj\b/g) {
+        $objects{"$1.$2"} = {
+            pos => pos($data)
+        }
+    }
+
+
+
+    print Dumper(\%objects);
+    return \%info;
 
     while ($data =~ /([^\n]+)/g) {
         #dbg("pdfinfo: line=$1");
