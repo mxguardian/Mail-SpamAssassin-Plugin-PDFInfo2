@@ -5,9 +5,6 @@ use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
 
-use base 'Exporter';
-our @EXPORT_OK = qw(parse_data parse_file);
-
 sub new {
     my ($class,$data) = @_;
 
@@ -56,19 +53,19 @@ sub _parse_xref {
 
     pos($self->{data}) = $pos;
 
-    $self->{data} =~ /\G\s*xref\s+/g or die "xref not found";
+    $self->{data} =~ /\G\s*xref\s+/g or die "xref not found at position $pos";
 
     while ($self->{data} =~ /\G(\d+) (\d+)\s+/) {
         pos($self->{data}) = $+[0]; # advance the pointer
         my ($start,$count) = ($1,$2);
-        print "xref $start $count\n";
+        # print "xref $start $count\n";
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
             $self->{data} =~ /\G(\d+) (\d+) (f|n)\s+/g or die "Invalid xref entry";
             # print "$1 $2 $3\n";
             next unless $3 eq 'n';
             my ($offset,$gen) = ($1+0,$2+0);
             my $key = "$i $gen R";
-            print "$key = $offset\n";
+            # print "$key = $offset\n";
             $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
         }
     }
@@ -98,11 +95,40 @@ sub _parse_tree {
             $self->_parse_tree($kid);
         }
         return;
+    } elsif ( $node->{'/Type'} eq '/Page' ) {
+        if ( defined($node->{'/Annots'}) ) {
+            $self->_parse_annotation($self->_get_obj($_)) for @{$node->{'/Annots'}};
+        }
+    } else {
+        die "Unexpected page type";
     }
 
-    $node->{'/Type'} eq '/Page' or die "Unexpected page type";
+}
 
-    print "Page\n";
+sub _parse_annotation {
+    my ($self,$annot) = @_;
+    return unless $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'});
+
+    $self->_parse_action($annot->{'/A'});
+}
+
+sub _parse_action {
+    my ($self,$action) = @_;
+
+    if ( $action->{'/S'} eq '/URI' ) {
+        my $location = $action->{'/URI'};
+        $self->{info}->{uris}->{$location} = 1;
+        $self->{info}->{links}++;
+    }
+
+    if ( defined($action->{'/Next'}) ) {
+        # can be array or dict
+        if ( ref($action->{'/Next'}) eq 'ARRAY' ) {
+            $self->_parse_action($_) for @{$action->{'/Next'}};
+        } else {
+            $self->_parse_action($action->{'/Next'});
+        }
+    }
 
 }
 
@@ -128,7 +154,8 @@ sub _get_array {
 
     $self->{data} =~ /\G\s*\[/g or die "array not found";
 
-    while ($_ = $self->_get_primitive()) {
+    while () {
+        $_ = $self->_get_primitive();
         last if $_ eq ']';
         push(@array,$_);
     }
@@ -143,7 +170,8 @@ sub _get_dict {
 
     $self->{data} =~ /\G\s*<</g or die "dict not found";
 
-    while ($_ = $self->_get_primitive()) {
+    while () {
+        $_ = $self->_get_primitive();
         last if $_ eq '>>';
         push(@array,$_);
     }
@@ -172,7 +200,8 @@ sub _get_obj {
 sub _get_primitive {
     my ($self) = @_;
 
-    $self->{data} =~ /\G\s*(\/\w+|<{1,2}|>>|\[|\]|\(|\d+( \d+ R)?|true|false)/ or die "Unknown primitive: ".substr($self->{data},pos($self->{data}),20);
+    $self->{data} =~ /\G\s*(\/\w+|<{1,2}|>>|\[|\]|\(|\d+ \d+ R\b|\d+(\.\d+)?|true|false)/ or die "Unknown primitive at offset ".pos($self->{data});
+    # print "> $1\n";
     if ( $1 eq '<<' ) {
         my $dict = $self->_get_dict();
         return $dict;
