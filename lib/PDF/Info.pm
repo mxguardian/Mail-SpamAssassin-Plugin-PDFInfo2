@@ -36,7 +36,10 @@ sub parse {
         links  => 0,
         uris   => {},
         pages  => 0,
-        images => 0,
+        images => {
+            count => 0,
+            area  => 0,
+        },
     };
 
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
@@ -49,7 +52,7 @@ sub parse {
 
     $self->{info}->{pages} = $self->{pages}->{'/Count'};
 
-    $self->_parse_tree($self->{catalog}->{'/Pages'});
+    $self->_parse_pages($self->{catalog}->{'/Pages'});
 
 }
 
@@ -128,7 +131,7 @@ sub _parse_xref_stream {
 
 }
 
-sub _parse_tree {
+sub _parse_pages {
     my ($self,$ref) = @_;
 
     my $node = $self->_get_obj($ref);
@@ -136,25 +139,29 @@ sub _parse_tree {
     return unless defined($node);
 
     if ( $node->{'/Type'} eq '/Pages' ) {
-        foreach my $kid (@{$node->{'/Kids'}}) {
-            $self->_parse_tree($kid);
-        }
+        $self->_parse_pages($_) for (@{$node->{'/Kids'}});
         return;
     } elsif ( $node->{'/Type'} eq '/Page' ) {
-        if ( defined($node->{'/Annots'}) ) {
-            $self->_parse_annotation($self->_get_obj($_)) for @{$node->{'/Annots'}};
-        }
+        $self->_parse_annotations($node->{'/Annots'}) if (defined($node->{'/Annots'}));
+        $self->_parse_resources($node->{'/Resources'}) if (defined($node->{'/Resources'}));
     } else {
         die "Unexpected page type";
     }
 
 }
 
-sub _parse_annotation {
-    my ($self,$annot) = @_;
-    return unless $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'});
+sub _parse_annotations {
+    my ($self,$annots) = @_;
+    $annots = $self->_dereference($annots);
+    return unless defined($annots);
 
-    $self->_parse_action($annot->{'/A'});
+    for my $ref (@$annots) {
+        my $annot = $self->_get_obj($ref);
+        if ( $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'}) ) {
+            $self->_parse_action($annot->{'/A'});
+        }
+    }
+
 }
 
 sub _parse_action {
@@ -176,12 +183,54 @@ sub _parse_action {
     }
 
 }
+sub _parse_resources {
+    my ($self,$resources) = @_;
+    $resources = $self->_dereference($resources);
+    return unless defined($resources);
+
+    $self->_parse_xobject($resources->{'/XObject'}) if (defined($resources->{'/XObject'}));
+
+}
+
+sub _parse_xobject {
+    my ($self,$xobject) = @_;
+    $xobject = $self->_dereference($xobject);
+    return unless defined($xobject);
+
+    for my $name (keys %$xobject) {
+        my $ref = $xobject->{$name};
+        my $obj = $self->_get_obj($ref);
+        if ( $obj->{'/Subtype'} eq '/Image' ) {
+            if ( !defined($self->{images}->{$ref}) ) {
+                $self->{images}->{$ref} = 1;
+                $self->_parse_image($obj)
+            }
+        } elsif ( $obj->{'/Subtype'} eq '/Form' ) {
+            $self->_parse_resources($obj->{'/Resources'}) if (defined($obj->{'/Resources'}));
+        }
+    }
+
+}
+
+sub _parse_image {
+    my ($self,$image) = @_;
+    return unless defined($image);
+
+    $self->{info}->{images}->{count}++;
+
+    # if ( defined($image->{'/SMask'}) ) {
+    #     $self->_parse_image( $self->_dereference($image->{'/SMask'}) );
+    # }
+
+}
 
 sub _get_obj {
     my ($self,$ref) = @_;
 
+    # return undef for non-existent objects
     return undef unless defined($ref) && defined($self->{xref}->{$ref});
 
+    # return cached object if possible
     return $self->{cache}->{$ref} if defined($self->{cache}->{$ref});
 
     if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
@@ -192,6 +241,14 @@ sub _get_obj {
     $self->{data} =~ /\G\s*(\d+ \d+) obj\s*/g or die "object $ref not found";
 
     return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$self->{data});
+}
+
+sub _dereference {
+    my ($self,$obj) = @_;
+    while ( defined($obj) && !ref($obj) && $obj =~ /^\d+ \d+ R$/ ) {
+        $obj = $self->_get_obj($obj);
+    }
+    return $obj;
 }
 
 sub _get_compressed_obj {

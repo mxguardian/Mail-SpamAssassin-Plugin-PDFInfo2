@@ -13,14 +13,16 @@ test_file($_) for @files;
 sub test_file {
     my ($filename) = @_;
 
+    print "Testing $filename\n";
+
     open my $fh, '<', $filename or die;
     local $/ = undef;
     my $data = <$fh>;
     close $fh;
 
     my $pdf = PDF::Info->new($data);
-    
-    is_deeply pdf_info($filename), $pdf->info(), "$filename";
+
+    is_deeply $pdf->info(), pdf_info($filename), "$filename";
 }
 
 sub pdf_info {
@@ -30,7 +32,10 @@ sub pdf_info {
         links  => 0,
         uris   => {},
         pages  => 0,
-        images => 0,
+        images => {
+            count => 0,
+            area  => 0,
+        },
     };
 
     # Get page count and URI's
@@ -49,15 +54,17 @@ sub pdf_info {
     }
 
     # Count images
-    my $images = 0;
+    my %images;
     ($stdout, $stderr, $exit) = capture {
         system('/usr/bin/pdfimages', '-list', $filename);
     };
     $exit == 0 or die "PDFText: $stderr";
     for (split(/^/, $stdout)) {
-        $images++ if /^\s*\d/;
+        my $object = substr($_,60,6);
+        $object =~ s/^\s+|\s+$//;
+        $images{$object} = 1 if $object =~ /^\d+$/;
     }
-    $pdf_text_info->{images} += $images;
+    $pdf_text_info->{images}->{count} += scalar(keys %images);
 
     return $pdf_text_info;
 }
