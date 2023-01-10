@@ -1,7 +1,9 @@
 package PDF::Info;
 use strict;
-use warnings;
+use bytes;
+use warnings FATAL => 'all';
 use Digest::MD5 qw(md5_hex);
+use Compress::Zlib;
 use Data::Dumper;
 use Carp;
 
@@ -53,6 +55,9 @@ sub _parse_xref {
 
     pos($self->{data}) = $pos;
 
+    if ( $self->{data} =~ /\G\s*\d+ \d+ obj\s+/) {
+        return $self->_parse_xref_stream($+[0]);
+    }
     $self->{data} =~ /\G\s*xref\s+/g or die "xref not found at position $pos";
 
     while ($self->{data} =~ /\G(\d+) (\d+)\s+/) {
@@ -84,11 +89,48 @@ sub _parse_xref {
 
 }
 
+sub _parse_xref_stream {
+    my ($self,$pos) = @_;
+
+    pos($self->{data}) = $pos;
+
+    my $xref = $self->_get_dict();
+    # print Dumper($xref);
+    my $start = $xref->{'/Index'}->[0];
+    my $count = $xref->{'/Index'}->[1];
+    my $width = $xref->{'/W'}->[0] + $xref->{'/W'}->[1] + $xref->{'/W'}->[2];
+    my $template = 'H'.($xref->{'/W'}->[0]*2).'H'.($xref->{'/W'}->[1]*2).'H'.($xref->{'/W'}->[2]*2);
+
+    my $data = $self->_get_stream_data($xref);
+
+    for ( my ($i,$n,$o)=($start,0,0); $n<$count; $i++,$n++,$o+=$width ) {
+        my ($type,@fields) = map { hex($_) } unpack("x$o $template",$data);
+        # print join(',',@fields),"\n";
+        if ( $type == 0 ) {
+            next;
+        } elsif ( $type == 1 ) {
+            my ($offset,$gen) = @fields;
+            my $key = "$i $gen R";
+            print "$key = $offset\n";
+            $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
+        } elsif ( $type == 2 ) {
+            my ($obj,$index) = @fields;
+            my $key = "$i 0 R";
+            print "$key = $obj,$index\n";
+            $self->{xref}->{$key} = [ "$obj 0 R", $index ] unless defined($self->{xref}->{$key});
+        }
+    }
+
+    $self->{trailer} = $xref;
+
+}
+
 sub _parse_tree {
     my ($self,$ref) = @_;
 
     my $node = $self->_get_obj($ref);
     print Dumper($node);
+    return unless defined($node);
 
     if ( $node->{'/Type'} eq '/Pages' ) {
         foreach my $kid (@{$node->{'/Kids'}}) {
@@ -179,7 +221,7 @@ sub _get_dict {
     my %dict = @array;
 
     if ( $self->{data} =~ /\G\s*stream\r?\n/ ) {
-        $dict{_stream} = $+[0];
+        $dict{_offset} = $+[0];
     }
 
     return \%dict;
@@ -189,12 +231,89 @@ sub _get_dict {
 sub _get_obj {
     my ($self,$ref) = @_;
 
-    return undef unless defined($self->{xref}->{$ref});
+    return undef unless defined($ref) && defined($self->{xref}->{$ref});
 
+    return $self->{cache}->{$ref} if defined($self->{cache}->{$ref});
+
+    if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
+        return $self->{cache}->{$ref} = $self->_get_compressed_obj(@{$self->{xref}->{$ref}});
+    }
     pos($self->{data}) = $self->{xref}->{$ref};
-    $self->{data} =~ /\G\s*(\d+ \d+) obj\s*/g or die "object not found";
+    $self->{data} =~ /\G\s*(\d+ \d+) obj\s*/g or die "object $ref not found";
 
-    return $self->_get_primitive();
+    return $self->{cache}->{$ref} = $self->_get_primitive();
+}
+
+sub _get_compressed_obj {
+    my ($self,$obj,$index) = @_;
+
+    my $stream_obj = $self->_get_obj($obj);
+    print Dumper($stream_obj);
+    my $data = $self->_get_stream_data($stream_obj);
+
+    if ( !defined($stream_obj->{xref}) ) {
+        while ( $data =~ /\G\s*(\d+) (\d+)/g ) {
+            $stream_obj->{xref}->{$1} = $2;
+        }
+    }
+
+    print $data,"\n";
+    print $index." ".$stream_obj->{xref}->{$index},"\n";
+    exit;
+}
+
+sub _get_stream_data {
+    my ($self,$stream_obj) = @_;
+
+    return $stream_obj->{_stream} if defined($stream_obj->{_stream});
+
+    my $offset = $stream_obj->{'_offset'};
+    my $length = $stream_obj->{'/Length'};
+    my $filter = $stream_obj->{'/Filter'} || '';
+
+    if ( $filter eq '/FlateDecode' ) {
+        return $stream_obj->{_stream} = _flate_decode(
+            substr($self->{data},$offset,$length),
+            $stream_obj->{'/DecodeParms'}->{'/Predictor'},
+            $stream_obj->{'/DecodeParms'}->{'/Columns'},
+        );
+    }
+
+    return substr($self->{data},$offset,$length);
+}
+
+sub _flate_decode {
+    my ($data,$predictor,$columns) = @_;
+
+    $data = uncompress($data);
+    return $data unless defined($predictor);
+
+    my $length = length($data);
+    my $out;
+
+    my @prior = (0) x $columns;
+    for( my $i=0; $i<$length; $i+=($columns+1) ) {
+        my $template = 'x'.$i.'C'.($columns+1);
+        my @row = unpack($template,$data);
+        my $alg = shift(@row);
+        my @out;
+
+        for( my $x=0; $x<scalar(@row);$x++) {
+            if ( $alg == 2 ) {
+                push(@out,($row[$x]+$prior[$x])%256);
+            } else {
+                die "Unknown algorithm: $alg";
+            }
+        }
+
+        $out .= pack('C*',@out);
+        # printf "i=$i prior=%s row=%s out=%s\n",join(',',@prior),join(',',@row),join(',',@out);
+
+        @prior = ( @out );
+    }
+
+    return $out;
+
 }
 
 sub _get_primitive {
@@ -765,6 +884,13 @@ sub PDFGetPrimitive
     }
 
     return @collector;
+}
+
+sub _bin2hex {
+    my $b = shift;
+    my $n = length($b);
+    my $s = 2*$n;
+    return unpack("H$s", $b);
 }
 
 1;
