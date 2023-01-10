@@ -2,8 +2,9 @@ package PDF::Info;
 use strict;
 use bytes;
 use warnings FATAL => 'all';
+use PDF::Core;
+use PDF::FlateDecode;
 use Digest::MD5 qw(md5_hex);
-use Compress::Zlib;
 use Data::Dumper;
 use Carp;
 
@@ -77,7 +78,7 @@ sub _parse_xref {
 
     $self->{data} =~ /\G\s*trailer\s+/g or die "trailer not found";
 
-    my $trailer = $self->_get_dict();
+    my $trailer = PDF::Core::_get_dict(\$self->{data});
     $self->{trailer} = {
         %{$trailer},
         %{$self->{trailer}}
@@ -94,7 +95,7 @@ sub _parse_xref_stream {
 
     pos($self->{data}) = $pos;
 
-    my $xref = $self->_get_dict();
+    my $xref = PDF::Core::_get_dict(\$self->{data});
     # print Dumper($xref);
     my $start = $xref->{'/Index'}->[0];
     my $count = $xref->{'/Index'}->[1];
@@ -111,12 +112,12 @@ sub _parse_xref_stream {
         } elsif ( $type == 1 ) {
             my ($offset,$gen) = @fields;
             my $key = "$i $gen R";
-            print "$key = $offset\n";
+            # print "$key = $offset\n";
             $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
         } elsif ( $type == 2 ) {
             my ($obj,$index) = @fields;
             my $key = "$i 0 R";
-            print "$key = $obj,$index\n";
+            # print "$key = $obj,$index\n";
             $self->{xref}->{$key} = [ "$obj 0 R", $index ] unless defined($self->{xref}->{$key});
         }
     }
@@ -174,60 +175,6 @@ sub _parse_action {
 
 }
 
-sub _get_string {
-    my ($self) = @_;
-
-    $self->{data} =~ /\G\s*\(/g or die "string not found";
-
-    $self->{data} =~ /\G(.*?)(?<!\\)\)/g or die "Invalid string";
-    return $1;
-}
-
-sub _get_hex_string {
-    my ($self) = @_;
-
-    $self->{data} =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string";
-    return $1;
-}
-
-sub _get_array {
-    my ($self) = @_;
-    my @array;
-
-    $self->{data} =~ /\G\s*\[/g or die "array not found";
-
-    while () {
-        $_ = $self->_get_primitive();
-        last if $_ eq ']';
-        push(@array,$_);
-    }
-
-    return \@array;
-}
-
-sub _get_dict {
-    my ($self) = @_;
-
-    my @array;
-
-    $self->{data} =~ /\G\s*<</g or die "dict not found";
-
-    while () {
-        $_ = $self->_get_primitive();
-        last if $_ eq '>>';
-        push(@array,$_);
-    }
-
-    my %dict = @array;
-
-    if ( $self->{data} =~ /\G\s*stream\r?\n/ ) {
-        $dict{_offset} = $+[0];
-    }
-
-    return \%dict;
-
-}
-
 sub _get_obj {
     my ($self,$ref) = @_;
 
@@ -236,30 +183,38 @@ sub _get_obj {
     return $self->{cache}->{$ref} if defined($self->{cache}->{$ref});
 
     if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
-        return $self->{cache}->{$ref} = $self->_get_compressed_obj(@{$self->{xref}->{$ref}});
+        my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
+        return $self->{cache}->{$ref} = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
     }
     pos($self->{data}) = $self->{xref}->{$ref};
     $self->{data} =~ /\G\s*(\d+ \d+) obj\s*/g or die "object $ref not found";
 
-    return $self->{cache}->{$ref} = $self->_get_primitive();
+    return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$self->{data});
 }
 
 sub _get_compressed_obj {
-    my ($self,$obj,$index) = @_;
+    my ($self,$stream_obj_ref,$index,$ref) = @_;
 
-    my $stream_obj = $self->_get_obj($obj);
-    print Dumper($stream_obj);
+    $ref =~ /^(\d+)/ or die "invalid object reference";
+    my $obj = $1;
+
+    my $stream_obj = $self->_get_obj($stream_obj_ref);
+    # print Dumper($stream_obj);
     my $data = $self->_get_stream_data($stream_obj);
 
     if ( !defined($stream_obj->{xref}) ) {
-        while ( $data =~ /\G\s*(\d+) (\d+)/g ) {
+        while ( $data =~ /\G\s*(\d+) (\d+)/ ) {
             $stream_obj->{xref}->{$1} = $2;
+            pos($data) = $+[0];
+            # print "$1 -> $2\n";
         }
     }
 
-    print $data,"\n";
-    print $index." ".$stream_obj->{xref}->{$index},"\n";
-    exit;
+    # print $data,"\n";
+    print "$stream_obj_ref $index $ref\n";
+    print $stream_obj->{xref}->{$obj},"\n";
+    pos($data) = pos($data) + $stream_obj->{xref}->{$obj};
+    return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$data);
 }
 
 sub _get_stream_data {
@@ -272,73 +227,13 @@ sub _get_stream_data {
     my $filter = $stream_obj->{'/Filter'} || '';
 
     if ( $filter eq '/FlateDecode' ) {
-        return $stream_obj->{_stream} = _flate_decode(
+        return $stream_obj->{_stream} = PDF::FlateDecode::decode(
             substr($self->{data},$offset,$length),
-            $stream_obj->{'/DecodeParms'}->{'/Predictor'},
-            $stream_obj->{'/DecodeParms'}->{'/Columns'},
+            $stream_obj->{'/DecodeParms'},
         );
     }
 
     return substr($self->{data},$offset,$length);
-}
-
-sub _flate_decode {
-    my ($data,$predictor,$columns) = @_;
-
-    $data = uncompress($data);
-    return $data unless defined($predictor);
-
-    my $length = length($data);
-    my $out;
-
-    my @prior = (0) x $columns;
-    for( my $i=0; $i<$length; $i+=($columns+1) ) {
-        my $template = 'x'.$i.'C'.($columns+1);
-        my @row = unpack($template,$data);
-        my $alg = shift(@row);
-        my @out;
-
-        for( my $x=0; $x<scalar(@row);$x++) {
-            if ( $alg == 2 ) {
-                push(@out,($row[$x]+$prior[$x])%256);
-            } else {
-                die "Unknown algorithm: $alg";
-            }
-        }
-
-        $out .= pack('C*',@out);
-        # printf "i=$i prior=%s row=%s out=%s\n",join(',',@prior),join(',',@row),join(',',@out);
-
-        @prior = ( @out );
-    }
-
-    return $out;
-
-}
-
-sub _get_primitive {
-    my ($self) = @_;
-
-    $self->{data} =~ /\G\s*(\/\w+|<{1,2}|>>|\[|\]|\(|\d+ \d+ R\b|\d+(\.\d+)?|true|false)/ or die "Unknown primitive at offset ".pos($self->{data});
-    # print "> $1\n";
-    if ( $1 eq '<<' ) {
-        my $dict = $self->_get_dict();
-        return $dict;
-    }
-    if ( $1 eq '(' ) {
-        return $self->_get_string();
-    }
-    if ( $1 eq '<' ) {
-        return $self->_get_hex_string();
-    }
-    if ( $1 eq '[' ) {
-        return $self->_get_array();
-    }
-
-    pos($self->{data}) = $+[0];
-
-    return $1;
-
 }
 
 sub parse_data {
