@@ -13,26 +13,30 @@ sub new {
 
     $data =~ /^%PDF\-(\d\.\d)/ or carp("PDF magic header not found");
 
-    bless {
+    my $self = bless {
         data    => $data,
         version => $1,
         xref    => {},
         trailer => {}
     }, $class;
+
+    $self;
 }
 
 sub info {
     my ($self) = @_;
-    return $self->{info} if defined($self->{info});
+    $self->parse unless defined($self->{info});
+    return $self->{info};
+}
+
+sub parse {
+    my ($self) = @_;
 
     $self->{info} = {
         links  => 0,
         uris   => {},
         pages  => 0,
-        words  => 0,
         images => 0,
-        md5    => '',
-        fuzzy  => '',
     };
 
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
@@ -46,8 +50,6 @@ sub info {
     $self->{info}->{pages} = $self->{pages}->{'/Count'};
 
     $self->_parse_tree($self->{catalog}->{'/Pages'});
-
-    return $self->{info};
 
 }
 
@@ -130,7 +132,7 @@ sub _parse_tree {
     my ($self,$ref) = @_;
 
     my $node = $self->_get_obj($ref);
-    print Dumper($node);
+    # print Dumper($node);
     return unless defined($node);
 
     if ( $node->{'/Type'} eq '/Pages' ) {
@@ -211,8 +213,8 @@ sub _get_compressed_obj {
     }
 
     # print $data,"\n";
-    print "$stream_obj_ref $index $ref\n";
-    print $stream_obj->{xref}->{$obj},"\n";
+    # print "$stream_obj_ref $index $ref\n";
+    # print $stream_obj->{xref}->{$obj},"\n";
     pos($data) = pos($data) + $stream_obj->{xref}->{$obj};
     return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$data);
 }
