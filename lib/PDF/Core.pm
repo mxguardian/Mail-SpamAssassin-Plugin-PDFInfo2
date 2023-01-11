@@ -62,28 +62,34 @@ sub _get_dict {
 sub _get_primitive {
     my ($ptr) = @_;
 
-    $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]+ | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | -?\d+(\.\d+)? | true | false )/x or do {
-        print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
-        croak "Unknown primitive at offset ".pos($$ptr);
-    };
-    # print "> $1\n";
-    if ( $1 eq '<<' ) {
-        my $dict = _get_dict($ptr);
-        return $dict;
-    }
-    if ( $1 eq '(' ) {
-        return _get_string($ptr);
-    }
-    if ( $1 eq '<' ) {
-        return _get_hex_string($ptr);
-    }
-    if ( $1 eq '[' ) {
-        return _get_array($ptr);
-    }
+    while () {
+        $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]+ | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | -?\d+(\.\d+)? | true | false | \%[^\n]*\n )/x or do {
+            print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
+            croak "Unknown primitive at offset ".pos($$ptr);
+        };
+        # print "> $1\n";
+        if ( $1 eq '<<' ) {
+            return _get_dict($ptr);
+        }
+        if ( $1 eq '(' ) {
+            return _get_string($ptr);
+        }
+        if ( $1 eq '<' ) {
+            return _get_hex_string($ptr);
+        }
+        if ( $1 eq '[' ) {
+            return _get_array($ptr);
+        }
 
-    pos($$ptr) = $+[0];
+        pos($$ptr) = $+[0]; # Advance the pointer
 
-    return $1;
+        if ( substr($1,0,1) eq '%' ) {
+            # skip comments
+        } else {
+            return $1;
+        }
+
+    }
 
 }
 
