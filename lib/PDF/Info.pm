@@ -42,17 +42,23 @@ sub parse {
         },
     };
 
+    # Parse cross-reference table
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
-
     $self->_parse_xref($1);
 
-    $self->{catalog} = $self->_get_obj($self->{trailer}->{'/Root'});
+    # Parse page tree
+    my $catalog = $self->_get_obj($self->{trailer}->{'/Root'});
+    my $pages = $self->_get_obj($catalog->{'/Pages'});
+    $self->_parse_pages($pages);
 
-    $self->{pages} = $self->_get_obj($self->{catalog}->{'/Pages'});
+    $self->{info}->{pages} = $pages->{'/Count'};
 
-    $self->{info}->{pages} = $self->{pages}->{'/Count'};
-
-    $self->_parse_pages($self->{catalog}->{'/Pages'});
+    # force all objects to be decompressed (for debugging purposes)
+    for my $ref (keys %{$self->{xref}}) {
+        # print "$ref\n";
+        my $data = $self->_get_stream_data($ref);
+        # print $data if defined($data) && $data =~ /\/Image\b/;
+    }
 
 }
 
@@ -102,8 +108,11 @@ sub _parse_xref_stream {
 
     my $xref = PDF::Core::_get_dict(\$self->{data});
     # print Dumper($xref);
-    my $start = $xref->{'/Index'}->[0];
-    my $count = $xref->{'/Index'}->[1];
+    my ($start,$count) = (0,$xref->{'/Size'});
+    if ( defined($xref->{'/Index'}) ) {
+        $start = $xref->{'/Index'}->[0];
+        $count = $xref->{'/Index'}->[1];
+    }
     my $width = $xref->{'/W'}->[0] + $xref->{'/W'}->[1] + $xref->{'/W'}->[2];
     my $template = 'H'.($xref->{'/W'}->[0]*2).'H'.($xref->{'/W'}->[1]*2).'H'.($xref->{'/W'}->[2]*2);
 
@@ -129,12 +138,18 @@ sub _parse_xref_stream {
 
     $self->{trailer} = $xref;
 
+    if ( defined($xref->{'/Prev'}) ) {
+        $self->_parse_xref($xref->{'/Prev'});
+    }
+
+
 }
 
 sub _parse_pages {
-    my ($self,$ref) = @_;
+    my ($self,$node) = @_;
+    $node = $self->_dereference($node);
+    return unless defined($node);
 
-    my $node = $self->_get_obj($ref);
     # print Dumper($node);
     return unless defined($node);
 
@@ -166,6 +181,8 @@ sub _parse_annotations {
 
 sub _parse_action {
     my ($self,$action) = @_;
+    $action = $self->_dereference($action);
+    return unless defined($action);
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
@@ -202,10 +219,12 @@ sub _parse_xobject {
         my $obj = $self->_get_obj($ref);
         if ( $obj->{'/Subtype'} eq '/Image' ) {
             if ( !defined($self->{images}->{$ref}) ) {
+                # print "Image: $name $ref\n";
                 $self->{images}->{$ref} = 1;
                 $self->_parse_image($obj)
             }
         } elsif ( $obj->{'/Subtype'} eq '/Form' ) {
+            # print "Form: $name $ref\n";
             $self->_parse_resources($obj->{'/Resources'}) if (defined($obj->{'/Resources'}));
         }
     }
@@ -214,6 +233,7 @@ sub _parse_xobject {
 
 sub _parse_image {
     my ($self,$image) = @_;
+    $image = $self->_dereference($image);
     return unless defined($image);
 
     $self->{info}->{images}->{count}++;
@@ -261,38 +281,48 @@ sub _get_compressed_obj {
     # print Dumper($stream_obj);
     my $data = $self->_get_stream_data($stream_obj);
 
-    if ( !defined($stream_obj->{xref}) ) {
-        while ( $data =~ /\G\s*(\d+) (\d+)/ ) {
+    if ( !defined($stream_obj->{pos}) ) {
+        while ( $data =~ /\G\s*(\d+) (\d+)\s+/ ) {
             $stream_obj->{xref}->{$1} = $2;
             pos($data) = $+[0];
             # print "$1 -> $2\n";
         }
+        $stream_obj->{pos} = pos($data);
     }
 
-    # print $data,"\n";
-    # print "$stream_obj_ref $index $ref\n";
-    # print $stream_obj->{xref}->{$obj},"\n";
-    pos($data) = pos($data) + $stream_obj->{xref}->{$obj};
+    # print $data,"\n\n";
+    # print "$stream_obj_ref, $index, $ref\n";
+    # print $stream_obj->{pos}." + ".$stream_obj->{xref}->{$obj},"\n";
+    pos($data) = $stream_obj->{pos} + $stream_obj->{xref}->{$obj};
     return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$data);
 }
 
 sub _get_stream_data {
     my ($self,$stream_obj) = @_;
+    $stream_obj = $self->_dereference($stream_obj);
+    return unless defined($stream_obj);
 
-    return $stream_obj->{_stream} if defined($stream_obj->{_stream});
+    # not a stream object
+    return undef unless ref($stream_obj) eq 'HASH' && defined($stream_obj->{_stream_offset});
 
-    my $offset = $stream_obj->{'_offset'};
+    # check for cached version
+    return $stream_obj->{_stream_data} if defined($stream_obj->{_stream_data});
+
+    my $offset = $stream_obj->{_stream_offset};
     my $length = $stream_obj->{'/Length'};
     my $filter = $stream_obj->{'/Filter'} || '';
 
     if ( $filter eq '/FlateDecode' ) {
-        return $stream_obj->{_stream} = PDF::FlateDecode::decode(
+        $stream_obj->{_stream_data} = PDF::FlateDecode::decode(
             substr($self->{data},$offset,$length),
             $stream_obj->{'/DecodeParms'},
         );
+    } else {
+        $stream_obj->{_stream_data} = substr($self->{data},$offset,$length);
     }
 
-    return substr($self->{data},$offset,$length);
+    return $stream_obj->{_stream_data};
+
 }
 
 sub parse_data {
