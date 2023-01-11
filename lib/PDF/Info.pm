@@ -46,8 +46,11 @@ sub parse {
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
     $self->_parse_xref($1);
 
-    # Parse page tree
+    # Parse catalog
     my $catalog = $self->_get_obj($self->{trailer}->{'/Root'});
+    $self->_parse_action($catalog->{'/OpenAction'}) if defined($catalog->{'/OpenAction'});
+
+    # Parse page tree
     my $pages = $self->_get_obj($catalog->{'/Pages'});
     $self->_parse_pages($pages);
 
@@ -56,8 +59,11 @@ sub parse {
     # force all objects to be decompressed (for debugging purposes)
     for my $ref (keys %{$self->{xref}}) {
         # print "$ref\n";
-        my $data = $self->_get_stream_data($ref);
-        # print $data if defined($data) && $data =~ /\/Image\b/;
+        # my $data = $self->_get_stream_data($ref);
+        my $obj = $self->_get_obj($ref);
+        my $data = Dumper($obj);
+        # print "$ref $data\n" if defined($data) && $data =~ /\b288 0 R\b/;
+
     }
 
 }

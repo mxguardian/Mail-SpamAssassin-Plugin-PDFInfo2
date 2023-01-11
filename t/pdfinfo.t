@@ -60,6 +60,8 @@ sub pdf_info {
     };
     $exit == 0 or die "PDFText: $stderr";
     for (split(/^/, $stdout)) {
+        my $color = substr($_,32,3);
+        next if $color eq 'gra'; # skip grayscale images - probably a mask
         my $object = substr($_,60,6);
         $object =~ s/^\s+|\s+$//;
         $images{$object} = 1 if $object =~ /^\d+$/;
