@@ -3,7 +3,7 @@ use strict;
 use bytes;
 use warnings FATAL => 'all';
 use PDF::Core;
-use PDF::FlateDecode;
+use PDF::Filter::FlateDecode;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
@@ -313,9 +313,9 @@ sub _get_stream_data {
     my $filter = $stream_obj->{'/Filter'} || '';
 
     if ( $filter eq '/FlateDecode' ) {
-        $stream_obj->{_stream_data} = PDF::FlateDecode::decode(
-            substr($self->{data},$offset,$length),
-            $stream_obj->{'/DecodeParms'},
+        my $f = PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+        $stream_obj->{_stream_data} = $f->decode(
+            substr($self->{data},$offset,$length)
         );
     } else {
         $stream_obj->{_stream_data} = substr($self->{data},$offset,$length);

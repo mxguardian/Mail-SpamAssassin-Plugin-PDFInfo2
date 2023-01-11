@@ -1,22 +1,34 @@
-package PDF::FlateDecode;
+package PDF::Filter::FlateDecode;
 use strict;
 use warnings FATAL => 'all';
 use Compress::Zlib;
 
+sub new {
+    my ($class,$params) = @_;
+
+    my $self = {};
+
+    if ( defined($params) ) {
+        $self->{predictor} = $params->{'/Predictor'};
+        $self->{columns} = $params->{'/Columns'};
+    }
+
+    bless $self, $class;
+}
+
 sub decode {
-    my ($data,$params) = @_;
+    my ($self,$data) = @_;
 
     $data = uncompress($data);
-    return $data unless defined($params) && defined($params->{'/Predictor'});
+    return $data unless defined($self->{predictor});
 
     my $out;
-    my $predictor = $params->{'/Predictor'};
-    if ( $predictor == 2 ) {
+    if ( $self->{predictor} == 2 ) {
         die "TIFF Predictor not implemented";
-    } elsif ( $predictor >= 10 ) {
+    } elsif ( $self->{predictor} >= 10 ) {
 
         # PNG Predictor https://www.rfc-editor.org/rfc/rfc2083#section-6
-        my $columns = $params->{'/Columns'} + 1;
+        my $columns = $self->{columns} + 1;
         my $length = length($data);
 
         my @prior = (0) x $columns;
@@ -39,7 +51,7 @@ sub decode {
         }
 
     } else {
-        die "Unknown predictor $predictor";
+        die "Unknown predictor $self->{predictor}";
     }
 
     return $out;
