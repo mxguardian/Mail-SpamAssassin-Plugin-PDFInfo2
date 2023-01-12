@@ -1,4 +1,4 @@
-package PDF::Info;
+package PDF::Parser;
 use strict;
 use warnings FATAL => 'all';
 use PDF::Core;
@@ -8,8 +8,10 @@ use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
 
+my $debug;  # debugging level
+
 sub new {
-    my ($class,$data) = @_;
+    my ($class,$data,%opts) = @_;
 
     $data =~ /^%PDF\-(\d\.\d)/ or carp("PDF magic header not found");
 
@@ -20,6 +22,8 @@ sub new {
         trailer => {},
         core    => PDF::Core->new(),
     }, $class;
+
+    $debug = $opts{debug};
 
     $self;
 }
@@ -65,13 +69,16 @@ sub parse {
 
     # Parse catalog
     my $catalog = $self->_get_obj($self->{trailer}->{'/Root'});
-    $self->_parse_action($catalog->{'/OpenAction'}) if defined($catalog->{'/OpenAction'});
+    if (defined($catalog->{'/OpenAction'}) && ref($catalog->{'/OpenAction'}) eq 'HASH') {
+        $self->_parse_action($catalog->{'/OpenAction'});
+    }
 
     # Parse page tree
     my $pages = $self->_get_obj($catalog->{'/Pages'});
     $self->_parse_pages($pages);
 
     $self->{info}->{pages} = $pages->{'/Count'};
+    $self->{info}->{images}->{count} = grep { $self->{images}->{$_} == 1 } keys %{$self->{images}};
 
     # force all objects to be decompressed (for debugging purposes)
     # for my $ref (keys %{$self->{xref}}) {
@@ -207,7 +214,7 @@ sub _parse_annotations {
 
     for my $ref (@$annots) {
         my $annot = $self->_get_obj($ref);
-        if ( $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'}) ) {
+        if ( defined($annot->{'/Subtype'}) && $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'}) ) {
             $self->_parse_action($annot->{'/A'});
         }
     }
@@ -221,8 +228,10 @@ sub _parse_action {
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
-        $self->{info}->{uris}->{$location} = 1;
-        $self->{info}->{links}++;
+        if ( $location =~ /^https?:\/\// ) {
+            $self->{info}->{uris}->{$location} = 1;
+            $self->{info}->{links}++;
+        }
     }
 
     if ( defined($action->{'/Next'}) ) {
@@ -254,7 +263,7 @@ sub _parse_xobject {
         my $obj = $self->_get_obj($ref);
         if ( $obj->{'/Subtype'} eq '/Image' ) {
             if ( !defined($self->{images}->{$ref}) ) {
-                # print "Image: $name $ref\n";
+                debug('images',"Image: $name $ref");
                 $self->{images}->{$ref} = 1;
                 $self->_parse_image($obj)
             }
@@ -271,7 +280,11 @@ sub _parse_image {
     $image = $self->_dereference($image);
     return unless defined($image);
 
-    $self->{info}->{images}->{count}++;
+    # $self->{info}->{images}->{count}++;
+
+    if ( defined($image->{'/SMask'}) ) {
+        $self->{images}->{$image->{'/SMask'}} = 2;
+    }
 
 }
 
@@ -871,10 +884,16 @@ sub PDFGetPrimitive
 }
 
 sub _bin2hex {
-    my $b = shift;
-    my $n = length($b);
-    my $s = 2*$n;
-    return unpack("H$s", $b);
+    my $bytes = shift;
+    return unpack("H*", $bytes);
+}
+
+sub debug {
+    my ($level,$str) = @_;
+    return if !defined($debug);
+    if ( $debug eq $level || $debug eq 'all' ) {
+        print STDERR "$str\n";
+    }
 }
 
 1;

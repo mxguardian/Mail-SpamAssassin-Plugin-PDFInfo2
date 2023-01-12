@@ -118,7 +118,7 @@ sub get_primitive {
     my ($self,$ptr) = @_;
 
     while () {
-        $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]+ | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | -?\d+(?:\.\d+)? | true | false | \%[^\n]*\n )/x or do {
+        $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]+ | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | -?\d+(?:\.\d+)? | \.\d+ | true | false | null | \%[^\n]*\n )/x or do {
             # print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
             croak "Unknown primitive at offset ".pos($$ptr);
         };

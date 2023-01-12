@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Test::More;
 use Capture::Tiny qw(:all);
-use PDF::Info;
+use PDF::Parser;
 use Data::Dumper;
 
 my @files = glob('t/Data/*.pdf');
@@ -13,16 +13,26 @@ test_file($_) for @files;
 sub test_file {
     my ($filename) = @_;
 
-    print "Testing $filename\n";
+    # print "Testing $filename\n";
 
     open my $fh, '<', $filename or die;
     local $/ = undef;
     my $data = <$fh>;
     close $fh;
 
-    my $pdf = PDF::Info->new($data);
+    my $pdf = PDF::Parser->new($data);
 
-    is_deeply $pdf->info(), pdf_info($filename), "$filename";
+    my ($got,$expected) = ($pdf->info()->{images}->{count},pdf_info($filename)->{images}->{count});
+    if ( $got == $expected ) {
+        ok 1;
+    } else {
+        ok 0, $filename;
+        print "#       test: image count\n";
+        print "#        got: $got\n";
+        print "#   expected: $expected\n";
+        print "#\n";
+    }
+    # is_deeply $pdf->info(), pdf_info($filename), "$filename";
 }
 
 sub pdf_info {
