@@ -31,15 +31,14 @@ sub decode {
         my $columns = $self->{columns} + 1;
         my $length = length($data);
 
-        my @prior = (0) x $columns;
+        my @prior = (0) x ($columns-1);
         for( my $i=0; $i<$length; $i+=$columns ) {
             my @out;
-            my @row = unpack("x$i C$columns",$data);
-            my $alg = shift(@row);
+            my ($alg,@row) = unpack("x$i C$columns",$data);
 
             if ( $alg == 2 ) {
                 # PNG "Up" Predictor
-                push(@out,($row[$_]+$prior[$_])%256) for (0..$#row)
+                push(@out,($row[$_]+$prior[$_]) & 0xff) for (0..$#row)
             } else {
                 die "PNG algorithm $alg not implemented";
             }

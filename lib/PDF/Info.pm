@@ -4,6 +4,7 @@ use bytes;
 use warnings FATAL => 'all';
 use PDF::Core;
 use PDF::Filter::FlateDecode;
+use PDF::Filter::Decrypt;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
@@ -17,7 +18,8 @@ sub new {
         data    => $data,
         version => $1,
         xref    => {},
-        trailer => {}
+        trailer => {},
+        core    => PDF::Core->new(),
     }, $class;
 
     $self;
@@ -42,9 +44,12 @@ sub parse {
         },
     };
 
-    # Parse cross-reference table
+    # Parse cross-reference table (and trailer)
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
     $self->_parse_xref($1);
+
+    # Parse encryption dictionary
+    $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
 
     # Parse catalog
     my $catalog = $self->_get_obj($self->{trailer}->{'/Root'});
@@ -57,14 +62,14 @@ sub parse {
     $self->{info}->{pages} = $pages->{'/Count'};
 
     # force all objects to be decompressed (for debugging purposes)
-    for my $ref (keys %{$self->{xref}}) {
-        # print "$ref\n";
-        # my $data = $self->_get_stream_data($ref);
-        my $obj = $self->_get_obj($ref);
-        my $data = Dumper($obj);
-        # print "$ref $data\n" if defined($data) && $data =~ /\b288 0 R\b/;
-
-    }
+    # for my $ref (keys %{$self->{xref}}) {
+    #     # print "$ref\n";
+    #     # my $data = $self->_get_stream_data($ref);
+    #     my $obj = $self->_get_obj($ref);
+    #     my $data = Dumper($obj);
+    #     # print "$ref $data\n" if defined($data) && $data =~ /\b288 0 R\b/;
+    #
+    # }
 
 }
 
@@ -95,7 +100,7 @@ sub _parse_xref {
 
     $self->{data} =~ /\G\s*trailer\s+/g or die "trailer not found";
 
-    my $trailer = PDF::Core::_get_dict(\$self->{data});
+    my $trailer = $self->{core}->_get_dict(\$self->{data});
     $self->{trailer} = {
         %{$trailer},
         %{$self->{trailer}}
@@ -112,7 +117,7 @@ sub _parse_xref_stream {
 
     pos($self->{data}) = $pos;
 
-    my $xref = PDF::Core::_get_dict(\$self->{data});
+    my $xref = $self->{core}->_get_dict(\$self->{data});
     # print Dumper($xref);
     my ($start,$count) = (0,$xref->{'/Size'});
     if ( defined($xref->{'/Index'}) ) {
@@ -148,6 +153,18 @@ sub _parse_xref_stream {
         $self->_parse_xref($xref->{'/Prev'});
     }
 
+}
+
+sub _parse_encrypt {
+    my ($self,$encrypt) = @_;
+    $encrypt = $self->_dereference($encrypt);
+    return unless defined($encrypt);
+
+    if ( $encrypt->{'/Filter'} ne '/Standard' ) {
+        die "Encryption filter $encrypt->{'/Filter'} not implemented";
+    }
+
+    $self->{core}->{crypt} = PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
 
 }
 
@@ -244,10 +261,6 @@ sub _parse_image {
 
     $self->{info}->{images}->{count}++;
 
-    # if ( defined($image->{'/SMask'}) ) {
-    #     $self->_parse_image( $self->_dereference($image->{'/SMask'}) );
-    # }
-
 }
 
 sub _get_obj {
@@ -259,14 +272,20 @@ sub _get_obj {
     # return cached object if possible
     return $self->{cache}->{$ref} if defined($self->{cache}->{$ref});
 
+    if (defined($self->{core}->{crypt})) {
+        my ($objnum,$gennum) = $ref =~ /^(\d+) (\d+) R$/;
+        $self->{core}->{crypt}->set_current_object($objnum, $gennum);
+    }
+
     if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
         my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
-        return $self->{cache}->{$ref} = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
+        $self->{cache}->{$ref} = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
+    } else {
+        pos($self->{data}) = $self->{xref}->{$ref};
+        $self->{data} =~ /\G\s*\d+ \d+ obj\s*/g or die "object $ref not found";
+        $self->{cache}->{$ref} = $self->{core}->_get_primitive(\$self->{data});
     }
-    pos($self->{data}) = $self->{xref}->{$ref};
-    $self->{data} =~ /\G\s*(\d+ \d+) obj\s*/g or die "object $ref not found";
-
-    return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$self->{data});
+    return $self->{cache}->{$ref};
 }
 
 sub _dereference {
@@ -300,7 +319,7 @@ sub _get_compressed_obj {
     # print "$stream_obj_ref, $index, $ref\n";
     # print $stream_obj->{pos}." + ".$stream_obj->{xref}->{$obj},"\n";
     pos($data) = $stream_obj->{pos} + $stream_obj->{xref}->{$obj};
-    return $self->{cache}->{$ref} = PDF::Core::_get_primitive(\$data);
+    return $self->{cache}->{$ref} = $self->{core}->_get_primitive(\$data);
 }
 
 sub _get_stream_data {
@@ -540,43 +559,6 @@ sub dbg {
 
 sub _set_tag {
 
-}
-
-sub UnQuoteName ($)
-{
-    my $value = shift;
-    $value =~ s/#([\da-f]{2})/chr(hex($1))/ige;
-    return $value;
-}
-
-sub UnQuoteString ($)
-{
-    #
-    # Translate quoted character.
-    #
-    my $param = shift;
-    my $value;
-    if (($value) = $param =~ m/^<(.*)>$/)
-    {
-        $value =~ tr/0-9A-Fa-f//cd;
-        $value .= "0" if (length ($value) % 2);
-        $value =~ s/([\da-f]{2})/chr(hex($1))/ige;
-    }
-    elsif (($value) = $param =~ m/^\((.*)\)$/)
-    {
-        my %quoted = ("n" => "\n", "r" => "\r",
-            "t" => "\t", "b" => "\b",
-            "f" => "\f", "\\" => "\\",
-            "(" => "(", ")" => ")");
-        $value =~ s/\\([nrtbf\\()]|[0-7]{1,3})/
-            defined ($quoted{$1}) ? $quoted{$1} : chr(oct($1))/gex;
-    }
-    else
-    {
-        $value = $param;
-    }
-
-    return $value;
 }
 
 sub PDFGetPrimitive
