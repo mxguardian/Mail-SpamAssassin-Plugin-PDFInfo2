@@ -1,7 +1,7 @@
 package PDF::Core;
 use strict;
 use warnings FATAL => 'all';
-use bytes;
+use Encode qw(from_to);
 use Carp;
 use Data::Dumper;
 
@@ -39,9 +39,6 @@ sub get_string {
         }
     }
 
-    # remove trailing null chars
-    $str =~ s/\x00+$//;
-
     # convert escape sequences
     my %quoted = ("n" => "\n", "r" => "\r",
         "t" => "\t", "b" => "\b",
@@ -52,8 +49,18 @@ sub get_string {
 
     # decrypt
     if ( defined($self->{crypt}) ) {
-        return $self->{crypt}->decrypt($str);
+        $str = $self->{crypt}->decrypt($str);
     }
+
+    # Convert to UTF-8 and remove BOM
+    if ( $str =~ s/^\xfe\xff// ) {
+        from_to($str,'UTF-16be', 'UTF-8');
+    } elsif ( $str =~ s/^\xff\xfe// ) {
+        from_to($str,'UTF-16le', 'UTF-8');
+    }
+
+    # remove trailing null chars
+    $str =~ s/\x00+$//;
 
     return $str;
 }

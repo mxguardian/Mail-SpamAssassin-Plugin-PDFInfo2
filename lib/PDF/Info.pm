@@ -1,6 +1,5 @@
 package PDF::Info;
 use strict;
-use bytes;
 use warnings FATAL => 'all';
 use PDF::Core;
 use PDF::Filter::FlateDecode;
@@ -50,6 +49,19 @@ sub parse {
 
     # Parse encryption dictionary
     $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
+
+    # Parse info object
+    my $info = $self->_get_obj($self->{trailer}->{'/Info'});
+    if ( defined($info) ) {
+        $self->{info}->{creator} = $info->{'/Creator'} if defined($info->{'/Creator'});
+        $self->{info}->{title} = $info->{'/Title'} if defined($info->{'/Title'});
+        $self->{info}->{author} = $info->{'/Author'} if defined($info->{'/Author'});
+        $self->{info}->{subject} = $info->{'/Subject'} if defined($info->{'/Subject'});
+        $self->{info}->{keywords} = $info->{'/Keywords'} if defined($info->{'/Keywords'});
+        $self->{info}->{producer} = $info->{'/Producer'} if defined($info->{'/Producer'});
+        $self->{info}->{creation_date} = $info->{'/CreationDate'} if defined($info->{'/CreationDate'});
+        $self->{info}->{modified_date} = $info->{'/ModDate'} if defined($info->{'/ModDate'});
+    }
 
     # Parse catalog
     my $catalog = $self->_get_obj($self->{trailer}->{'/Root'});

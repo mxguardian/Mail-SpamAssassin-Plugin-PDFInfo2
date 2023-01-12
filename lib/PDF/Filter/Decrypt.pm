@@ -1,7 +1,6 @@
 package PDF::Filter::Decrypt;
 use strict;
 use warnings FATAL => 'all';
-use bytes;
 use Digest::MD5;
 use Crypt::RC4;
 use Carp;
