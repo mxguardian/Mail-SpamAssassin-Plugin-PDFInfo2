@@ -100,7 +100,7 @@ sub _parse_xref {
 
     $self->{data} =~ /\G\s*trailer\s+/g or die "trailer not found";
 
-    my $trailer = $self->{core}->_get_dict(\$self->{data});
+    my $trailer = $self->{core}->get_dict(\$self->{data});
     $self->{trailer} = {
         %{$trailer},
         %{$self->{trailer}}
@@ -117,7 +117,7 @@ sub _parse_xref_stream {
 
     pos($self->{data}) = $pos;
 
-    my $xref = $self->{core}->_get_dict(\$self->{data});
+    my $xref = $self->{core}->get_dict(\$self->{data});
     # print Dumper($xref);
     my ($start,$count) = (0,$xref->{'/Size'});
     if ( defined($xref->{'/Index'}) ) {
@@ -283,7 +283,7 @@ sub _get_obj {
     } else {
         pos($self->{data}) = $self->{xref}->{$ref};
         $self->{data} =~ /\G\s*\d+ \d+ obj\s*/g or die "object $ref not found";
-        $self->{cache}->{$ref} = $self->{core}->_get_primitive(\$self->{data});
+        $self->{cache}->{$ref} = $self->{core}->get_primitive(\$self->{data});
     }
     return $self->{cache}->{$ref};
 }
@@ -319,7 +319,7 @@ sub _get_compressed_obj {
     # print "$stream_obj_ref, $index, $ref\n";
     # print $stream_obj->{pos}." + ".$stream_obj->{xref}->{$obj},"\n";
     pos($data) = $stream_obj->{pos} + $stream_obj->{xref}->{$obj};
-    return $self->{cache}->{$ref} = $self->{core}->_get_primitive(\$data);
+    return $self->{cache}->{$ref} = $self->{core}->get_primitive(\$data);
 }
 
 sub _get_stream_data {

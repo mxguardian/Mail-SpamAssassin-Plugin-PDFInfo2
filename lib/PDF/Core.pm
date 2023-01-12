@@ -10,36 +10,72 @@ sub new {
     bless {},$class;
 }
 
-sub _get_string {
+sub get_string {
     my ($self,$ptr) = @_;
 
-    $$ptr =~ /\G\s*\(/g or die "string not found";
+    my $offset = pos($$ptr);
+    $$ptr =~ /\G\s*\(/g or croak "string not found at offset $offset";
 
-    $$ptr =~ /\G(.*?)(?<!\\)\)/g or die "Invalid string";
+    my $depth = 1;
+    my $str = '';
+    while ($depth > 0) {
+        if ($$ptr =~ m/ \G ([^()]*) ([()]) /cgxms) {
+            my $data = $1;
+            my $delim = $2;
+            $str .= $data;
 
-    my $str = unquote_string($1);
+            # Make sure this is not an escaped paren, OR a real paren
+            # preceded by an escaped backslash!
+            if ($data =~ m/ (\\+) \z/xms && 1 == (length $1) % 2) {
+                $str .= $delim;
+            } elsif ($delim eq '(') {
+                $str .= $delim;
+                $depth++;
+            } elsif (--$depth > 0) {
+                $str .= $delim;
+            }
+        } else {
+            croak "Unterminated string at offset $offset";
+        }
+    }
 
+    # remove trailing null chars
+    $str =~ s/\x00+$//;
+
+    # convert escape sequences
+    my %quoted = ("n" => "\n", "r" => "\r",
+        "t" => "\t", "b" => "\b",
+        "f" => "\f", "\\" => "\\",
+        "(" => "(", ")" => ")");
+    $str =~ s/\\([nrtbf\\()]|[0-7]{1,3})/
+        defined ($quoted{$1}) ? $quoted{$1} : chr(oct($1))/gex;
+
+    # decrypt
     if ( defined($self->{crypt}) ) {
         return $self->{crypt}->decrypt($str);
     }
+
     return $str;
 }
 
-sub _get_hex_string {
+sub get_hex_string {
     my ($self,$ptr) = @_;
 
-    $$ptr =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string";
-    return pack("H*",$1);
+    $$ptr =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string at offset ".pos($$ptr);
+    my $str = $1;
+    $str =~ s/\s+//gxms;
+    $str .= '0' if (length($str) % 2 == 1);
+    return pack("H*",$str);
 }
 
-sub _get_array {
+sub get_array {
     my ($self,$ptr) = @_;
     my @array;
 
-    $$ptr =~ /\G\s*\[/g or die "array not found";
+    $$ptr =~ /\G\s*\[/g or die "array not found at offset ".pos($$ptr);
 
     while () {
-        $_ = $self->_get_primitive($ptr);
+        $_ = $self->get_primitive($ptr);
         last if $_ eq ']';
         push(@array,$_);
     }
@@ -47,15 +83,15 @@ sub _get_array {
     return \@array;
 }
 
-sub _get_dict {
+sub get_dict {
     my ($self,$ptr) = @_;
 
     my @array;
 
-    $$ptr =~ /\G\s*<</g or die "dict not found";
+    $$ptr =~ /\G\s*<</g or die "dict not found at offset ".pos($$ptr);
 
     while () {
-        $_ = $self->_get_primitive($ptr);
+        $_ = $self->get_primitive($ptr);
         last if $_ eq '>>';
         push(@array,$_);
     }
@@ -71,26 +107,26 @@ sub _get_dict {
 
 }
 
-sub _get_primitive {
+sub get_primitive {
     my ($self,$ptr) = @_;
 
     while () {
         $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]+ | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | -?\d+(?:\.\d+)? | true | false | \%[^\n]*\n )/x or do {
-            print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
+            # print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
             croak "Unknown primitive at offset ".pos($$ptr);
         };
         # print "> $1\n";
         if ( $1 eq '<<' ) {
-            return $self->_get_dict($ptr);
+            return $self->get_dict($ptr);
         }
         if ( $1 eq '(' ) {
-            return $self->_get_string($ptr);
+            return $self->get_string($ptr);
         }
         if ( $1 eq '<' ) {
-            return $self->_get_hex_string($ptr);
+            return $self->get_hex_string($ptr);
         }
         if ( $1 eq '[' ) {
-            return $self->_get_array($ptr);
+            return $self->get_array($ptr);
         }
 
         pos($$ptr) = $+[0]; # Advance the pointer
@@ -110,22 +146,5 @@ sub unquote_name {
     $value =~ s/#([\da-f]{2})/chr(hex($1))/ige;
     return $value;
 }
-
-sub unquote_string {
-    my $value = shift;
-
-    $value =~ s/\x00+$//;  # remove trailing null chars
-
-    my %quoted = ("n" => "\n", "r" => "\r",
-        "t" => "\t", "b" => "\b",
-        "f" => "\f", "\\" => "\\",
-        "(" => "(", ")" => ")");
-
-    $value =~ s/\\([nrtbf\\()]|[0-7]{1,3})/
-        defined ($quoted{$1}) ? $quoted{$1} : chr(oct($1))/gex;
-
-    return $value;
-}
-
 
 1;

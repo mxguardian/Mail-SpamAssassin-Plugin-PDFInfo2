@@ -4,6 +4,7 @@ use warnings FATAL => 'all';
 use bytes;
 use Digest::MD5;
 use Crypt::RC4;
+use Carp;
 use Data::Dumper;
 
 =head1 SYNOPSIS
@@ -49,7 +50,7 @@ sub new {
     } elsif ($self->_check_upass($doc_id, $upassword)) {
         $self->{code} = $self->_compute_hash($doc_id, $upassword);
     } else {
-        die "Document is password-protected";
+        croak "Document is password-protected. Unable to decrypt data.";
     }
 
     $self;
