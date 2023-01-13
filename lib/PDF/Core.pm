@@ -95,10 +95,11 @@ sub get_dict {
 
     my @array;
 
-    $$ptr =~ /\G\s*<</g or die "dict not found at offset ".pos($$ptr);
+    $$ptr =~ /\G\s*<</g or croak "dict not found at offset ".pos($$ptr);
 
     while () {
         $_ = $self->get_primitive($ptr);
+        croak "Unexpected end of file" unless defined($_);
         last if $_ eq '>>';
         push(@array,$_);
     }
@@ -117,9 +118,11 @@ sub get_dict {
 sub get_primitive {
     my ($self,$ptr) = @_;
 
+    local $_;
+
     while () {
-        $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]+ | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | -?\d+(?:\.\d+)? | \.\d+ | true | false | null | \%[^\n]*\n )/x or do {
-            # print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
+        $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]* | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | [-+]?\d+(?:\.\d+)? | [-+]?\.\d+ | true | false | null | \%[^\n]*\n | [^\/%\(\)\[\]<>{}\s]+ | $ )/x or do {
+            print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
             croak "Unknown primitive at offset ".pos($$ptr);
         };
         # print "> $1\n";
@@ -134,6 +137,10 @@ sub get_primitive {
         }
         if ( $1 eq '[' ) {
             return $self->get_array($ptr);
+        }
+        if ( $1 eq '' ) {
+            # EOF
+            return undef;
         }
 
         pos($$ptr) = $+[0]; # Advance the pointer

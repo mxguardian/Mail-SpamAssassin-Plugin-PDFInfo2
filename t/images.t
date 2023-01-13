@@ -20,9 +20,10 @@ sub test_file {
     my $data = <$fh>;
     close $fh;
 
-    my $pdf = PDF::Parser->new($data);
+    my $pdf = PDF::Parser->new();
+    $pdf->parse($data);
 
-    my ($got,$expected) = ($pdf->info()->{images}->{count},pdf_info($filename)->{images}->{count});
+    my ($got,$expected) = ($pdf->get_image_count,pdf_info($filename)->{images}->{count});
     if ( $got == $expected ) {
         ok 1;
     } else {
