@@ -355,19 +355,6 @@ sub _parse_contents {
         }
     }
 
-
-
-    # while ($stream =~ /\G.*?\b(Do)\b/gs ) {
-    #     if ( $1 eq 'Do' ) {
-    #         if ($stream =~ /([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+cm\s+(\/[^\/%\(\)\[\]<>{}\s]+)\s+Do\G/) {
-    #             print "$1 $2 $3 $4 $5 $6 $7\n";
-    #         } else {
-    #             warn "problem at ",substr($stream,pos($stream)-10,20);
-    #         }
-    #
-    #     }
-    # }
-
 }
 
 sub _get_obj {
