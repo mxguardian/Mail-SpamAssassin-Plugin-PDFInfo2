@@ -20,7 +20,7 @@ sub new {
         images       => {},
         core         => PDF::Core->new(),
 
-        events => $opts{events},
+        context      => $opts{context},
 
         object_cache => {},
         stream_cache => {},
@@ -198,26 +198,17 @@ sub _parse_pages {
     } elsif ( $node->{'/Type'} eq '/Page' ) {
 
         push @{$self->{pages}}, $node;
+        $node->{page_number} = scalar(@{$self->{pages}});
 
         # call page begin handler
-        if (defined($self->{events}->{page_begin})) {
-            $self->{events}->{page_begin}->(
-                scalar(@{$self->{pages}}),
-                $node
-            );
-        }
+        $self->{context}->page_begin($node);
 
         $self->_parse_annotations($node->{'/Annots'}) if (defined($node->{'/Annots'}));
         $node->{'/Resources'} = $self->_parse_resources($node->{'/Resources'}) if (defined($node->{'/Resources'}));
         $self->_parse_contents($node->{'/Contents'},$node) if (defined($node->{'/Contents'}));
 
         # call page end handler
-        if (defined($self->{events}->{page_end})) {
-            $self->{events}->{page_end}->(
-                scalar(@{$self->{pages}}),
-                $node
-            );
-        }
+        $self->{context}->page_end($node);
 
     } else {
         die "Unexpected page type";
@@ -264,6 +255,7 @@ sub _parse_action {
     }
 
 }
+
 sub _parse_resources {
     my ($self,$resources) = @_;
     $resources = $self->_dereference($resources);
@@ -330,43 +322,35 @@ sub _parse_contents {
 
     $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
 
-    my $state = {
-        cm => [0,0,0,0,0,0]
-    };
-    my @params = ();
-    my $stream = '';
+    #@type PDF::Context
+    my $context = $self->{context};
+    my @params;
 
     for my $obj ( @$contents ) {
-        $stream = $self->_get_stream_data($obj);
+        my $stream = $self->_get_stream_data($obj);
         while (defined(my $token = $core->get_primitive(\$stream))) {
             if ( $token !~ /^[a-zA-Z][a-zA-Z0-9*'"]*$/) {
                 push(@params,$token);
                 next;
             }
             debug('tokens',$token.' '.join(',',@params));
-            if ( $token eq 'cm' ) {
-                $state->{cm} = [ @params ];
+            if ( $token eq 'q' ) {
+                $context->save_state();
+            } elsif ( $token eq 'Q') {
+                $context->restore_state();
+            } elsif ( $token eq 'cm' ) {
+                $context->concat_matrix(\@params);
             } elsif ( $token eq 'Do' ) {
-                # print "$token ".join(',',@params)."\n";
-                # print "cm=".join(',',@{$state->{cm}}),"\n";
-                my $name = $params[0];
-                my $xobj = $page->{'/Resources'}->{'/XObject'}->{$name};
+                my $xobj = $page->{'/Resources'}->{'/XObject'}->{$params[0]};
                 if ( $xobj->{'/Subtype'} eq '/Image' ) {
-                    # Call image handler
-                    if (defined($self->{events}->{image_handler})) {
-                        $self->{events}->{image_handler}->(
-                            $xobj,
-                            $state->{cm},
-                            $self->{pages}->[-1]
-                        );
-                    }
+                    $context->draw_image($xobj,$page);
+                } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
+                    $context->save_state();
+                    $context->concat_matrix($xobj->{'/Matrix'});
+                    $self->_parse_contents($xobj,$page);
+                    $context->restore_state();
                 }
-
-
-
             }
-
-
             @params = ();
         }
     }
@@ -490,5 +474,6 @@ sub debug {
         }
     }
 }
+
 
 1;
