@@ -69,10 +69,16 @@ sub get_hex_string {
     my ($self,$ptr) = @_;
 
     $$ptr =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string at offset ".pos($$ptr);
-    my $str = $1;
-    $str =~ s/\s+//gxms;
-    $str .= '0' if (length($str) % 2 == 1);
-    return pack("H*",$str);
+    my $hex = $1;
+    $hex =~ s/\s+//gxms;
+    $hex .= '0' if (length($hex) % 2 == 1);
+    my $str = pack("H*",$hex);
+    if ( $str =~ s/^\xfe\xff// ) {
+        from_to($str,'UTF-16be', 'UTF-8');
+    } elsif ( $str =~ s/^\xff\xfe// ) {
+        from_to($str,'UTF-16le', 'UTF-8');
+    }
+    return $str;
 }
 
 sub get_array {
@@ -117,6 +123,8 @@ sub get_dict {
 
 sub get_primitive {
     my ($self,$ptr) = @_;
+
+    return undef unless defined($$ptr);
 
     local $_;
 

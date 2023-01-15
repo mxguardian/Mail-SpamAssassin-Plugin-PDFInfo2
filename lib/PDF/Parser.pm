@@ -196,19 +196,21 @@ sub _parse_pages {
     if ( $node->{'/Type'} eq '/Pages' ) {
         $self->_parse_pages($_, $node) for (@{$node->{'/Kids'}});
     } elsif ( $node->{'/Type'} eq '/Page' ) {
-
+        my $process_page = 1;
         push @{$self->{pages}}, $node;
         $node->{page_number} = scalar(@{$self->{pages}});
 
         # call page begin handler
-        $self->{context}->page_begin($node);
+        $process_page = $self->{context}->page_begin($node) if $self->{context}->can('page_begin');
 
-        $self->_parse_annotations($node->{'/Annots'}) if (defined($node->{'/Annots'}));
-        $node->{'/Resources'} = $self->_parse_resources($node->{'/Resources'}) if (defined($node->{'/Resources'}));
-        $self->_parse_contents($node->{'/Contents'},$node) if (defined($node->{'/Contents'}));
+        if ( $process_page ) {
+            $self->_parse_annotations($node->{'/Annots'}) if (defined($node->{'/Annots'}));
+            $node->{'/Resources'} = $self->_parse_resources($node->{'/Resources'}) if (defined($node->{'/Resources'}));
+            $self->_parse_contents($node->{'/Contents'},$node) if (defined($node->{'/Contents'}));
 
-        # call page end handler
-        $self->{context}->page_end($node);
+            # call page end handler
+            $self->{context}->page_end($node) if $self->{context}->can('page_end');
+        }
 
     } else {
         die "Unexpected page type";
@@ -283,39 +285,6 @@ sub _parse_xobject {
     return $xobject;
 }
 
-sub _parse_image {
-    my ($self,$type,$ref,$obj,$name) = @_;
-
-    return unless defined($name);
-
-    # get object unless it was provided
-    $obj = $self->_get_obj($ref) unless defined($obj);
-    if ( !defined($obj) ) {
-        carp "Invalid image reference: $ref";
-        return;
-    }
-
-    debug('images',"Image: $name $ref\n".Dumper($obj));
-
-    my $image = {
-        type   => $type,
-        object => $ref,
-        name   => $name,
-        width  => $obj->{'/Width'},
-        height => $obj->{'/Height'},
-    };
-
-    # push(@{$self->{pages}->[-1]->{images}}, $image);
-
-    # $self->{pages}->[-1]->{images}->{$name} = $ref;
-    $self->{images}->{$ref} = $image unless defined($self->{images}->{$ref});
-
-    # if ( defined($obj->{'/SMask'}) ) {
-    #     $self->_parse_image('mask',$obj->{'/SMask'});
-    # }
-
-}
-
 sub _parse_contents {
     my ($self,$contents,$page) = @_;
     my $core = PDF::Core->new;
@@ -343,13 +312,46 @@ sub _parse_contents {
             } elsif ( $token eq 'Do' ) {
                 my $xobj = $page->{'/Resources'}->{'/XObject'}->{$params[0]};
                 if ( $xobj->{'/Subtype'} eq '/Image' ) {
-                    $context->draw_image($xobj,$page);
+                    $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
                 } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
                     $context->save_state();
                     $context->concat_matrix($xobj->{'/Matrix'});
                     $self->_parse_contents($xobj,$page);
                     $context->restore_state();
                 }
+            } elsif ( $token eq 're' ) {
+                $context->draw_shape('rect',@params) if $self->{context}->can('draw_shape');
+            } elsif ( $token eq 'm' ) {
+                $context->move(@params) if $self->{context}->can('move');
+            } elsif ( $token eq 'l' ) {
+                $context->line(@params) if $self->{context}->can('line');
+            } elsif ( $token eq 'h' ) {
+                $context->close_path(@params) if $self->{context}->can('close_path');
+            } elsif ( $token eq 'n' ) {
+                $context->end_path(@params) if $self->{context}->can('end_path');
+            } elsif ( $token eq 'c' ) {
+                $context->curve(@params) if $self->{context}->can('curve');
+            } elsif ( $token eq 'v' ) {
+                splice @params,0,0,undef,undef;
+                $context->curve(@params) if $self->{context}->can('curve');
+            } elsif ( $token eq 'y' ) {
+                splice @params,2,0,undef,undef;
+                $context->curve(@params) if $self->{context}->can('curve');
+            } elsif ( $token eq 'S' ) {
+                $context->stroke(@params) if $self->{context}->can('stroke');
+            } elsif ( $token eq 's' ) {
+                $context->close_path(@params) if $self->{context}->can('close_path');
+                $context->stroke(@params) if $self->{context}->can('stroke');
+            } elsif ( $token eq 'f' or $token eq 'F' ) {
+                $context->fill('nonzero') if $self->{context}->can('fill');
+            } elsif ( $token eq 'f*' ) {
+                $context->fill('evenodd') if $self->{context}->can('fill');
+            } elsif ( $token eq 'B' ) {
+                $context->fill_and_stroke('nonzero') if $self->{context}->can('fill_and_stroke');
+            } elsif ( $token eq 'B*' ) {
+                $context->fill_and_stroke('evenodd') if $self->{context}->can('fill_and_stroke');
+            } else {
+                # print "Skipping: $token\n";
             }
             @params = ();
         }
@@ -427,7 +429,7 @@ sub _get_stream_data {
     return undef unless ref($stream_obj) eq 'HASH' && defined($stream_obj->{_stream_offset});
 
     my $offset = $stream_obj->{_stream_offset};
-    my $length = $stream_obj->{'/Length'};
+    my $length = $self->_dereference($stream_obj->{'/Length'});
     my $filter = $stream_obj->{'/Filter'} || '';
 
     # check for cached version
