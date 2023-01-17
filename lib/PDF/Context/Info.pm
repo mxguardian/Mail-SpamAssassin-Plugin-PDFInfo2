@@ -1,6 +1,7 @@
 package PDF::Context::Info;
 use strict;
 use warnings FATAL => 'all';
+use PDF::Context;
 use Data::Dumper;
 
 our @ISA = qw(PDF::Context);

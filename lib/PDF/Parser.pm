@@ -4,6 +4,7 @@ use warnings FATAL => 'all';
 use PDF::Core;
 use PDF::Filter::FlateDecode;
 use PDF::Filter::Decrypt;
+use PDF::CMap;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
@@ -297,8 +298,10 @@ sub _parse_contents {
 
     for my $obj ( @$contents ) {
         my $stream = $self->_get_stream_data($obj);
-        while (defined(my $token = $core->get_primitive(\$stream))) {
-            if ( $token !~ /^[a-zA-Z][a-zA-Z0-9*'"]*$/) {
+        while () {
+            my ($token,$type) = $core->get_primitive(\$stream);
+            last unless defined($token);
+            if ( $type ne 'operator' ) {
                 push(@params,$token);
                 next;
             }
@@ -319,6 +322,7 @@ sub _parse_contents {
                     $self->_parse_contents($xobj,$page);
                     $context->restore_state();
                 }
+
             } elsif ( $token eq 're' ) {
                 $context->draw_shape('rect',@params) if $self->{context}->can('draw_shape');
             } elsif ( $token eq 'm' ) {
@@ -350,6 +354,20 @@ sub _parse_contents {
                 $context->fill_and_stroke('nonzero') if $self->{context}->can('fill_and_stroke');
             } elsif ( $token eq 'B*' ) {
                 $context->fill_and_stroke('evenodd') if $self->{context}->can('fill_and_stroke');
+
+            } elsif ( $token eq 'Tf' and $self->{context}->can('text_font') ) {
+                my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$params[0]});
+                my $cmap = PDF::CMap->new();
+                if ( defined($font->{'/ToUnicode'})) {
+                    # print "$font->{'/ToUnicode'}\n";
+                    $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
+                }
+                $context->text_font($font,$cmap);
+            } elsif ( $token eq 'Tj' ) {
+                $context->text(@params) if $self->{context}->can('text');
+            } elsif ( $token eq 'Td' || $token eq 'TD' || $token eq 'T*' ) {
+                $context->text_newline(@params) if $self->{context}->can('text_newline');
+
             } else {
                 # print "Skipping: $token\n";
             }

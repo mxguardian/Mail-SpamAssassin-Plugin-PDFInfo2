@@ -1,7 +1,7 @@
 package PDF::Core;
 use strict;
 use warnings FATAL => 'all';
-use Encode qw(from_to);
+use Encode qw(from_to decode);
 use Carp;
 use Data::Dumper;
 
@@ -62,7 +62,7 @@ sub get_string {
     # remove trailing null chars
     $str =~ s/\x00+$//;
 
-    return $str;
+    return wantarray ? ($str,'string') : $str;
 }
 
 sub get_hex_string {
@@ -78,7 +78,7 @@ sub get_hex_string {
     } elsif ( $str =~ s/^\xff\xfe// ) {
         from_to($str,'UTF-16le', 'UTF-8');
     }
-    return $str;
+    return wantarray ? ($str,'string') : $str;
 }
 
 sub get_array {
@@ -88,12 +88,12 @@ sub get_array {
     $$ptr =~ /\G\s*\[/g or die "array not found at offset ".pos($$ptr);
 
     while () {
-        $_ = $self->get_primitive($ptr);
+        ($_) = $self->get_primitive($ptr);
         last if $_ eq ']';
         push(@array,$_);
     }
 
-    return \@array;
+    return wantarray ? (\@array,'array') : \@array;
 }
 
 sub get_dict {
@@ -104,7 +104,7 @@ sub get_dict {
     $$ptr =~ /\G\s*<</g or croak "dict not found at offset ".pos($$ptr);
 
     while () {
-        $_ = $self->get_primitive($ptr);
+        ($_) = $self->get_primitive($ptr);
         croak "Unexpected end of file" unless defined($_);
         last if $_ eq '>>';
         push(@array,$_);
@@ -117,7 +117,7 @@ sub get_dict {
         $dict{_stream_offset} = $+[0];
     }
 
-    return \%dict;
+    return wantarray ? (\%dict,'dict') : \%dict;
 
 }
 
@@ -129,35 +129,55 @@ sub get_primitive {
     local $_;
 
     while () {
-        $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]* | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | [-+]?\d+(?:\.\d+)? | [-+]?\.\d+ | true | false | null | \%[^\n]*\n | [^\/%\(\)\[\]<>{}\s]+ | $ )/x or do {
-            print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
-            croak "Unknown primitive at offset ".pos($$ptr);
-        };
+        # $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]* | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | [-+]?\d+(?:\.\d+)? | [-+]?\.\d+ | true | false | null | \%[^\n]*\n | [^\/%\(\)\[\]<>{}\s]+ | $ )/x or do {
+        #     print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
+        #     croak "Unknown primitive at offset ".pos($$ptr);
+        # };
         # print "> $1\n";
-        if ( $1 eq '<<' ) {
+        if ( $$ptr =~ /\G\s*<</ ) {
             return $self->get_dict($ptr);
         }
-        if ( $1 eq '(' ) {
+        if ( $$ptr =~ /\G\s*\(/ ) {
             return $self->get_string($ptr);
         }
-        if ( $1 eq '<' ) {
+        if ( $$ptr =~ /\G\s*</ ) {
             return $self->get_hex_string($ptr);
         }
-        if ( $1 eq '[' ) {
+        if ( $$ptr =~ /\G\s*\[/ ) {
             return $self->get_array($ptr);
         }
-        if ( $1 eq '' ) {
+        if ( $$ptr =~ /\G\s*(\/[^\/%\(\)\[\]<>{}\s]*)/gc ) {
+            return wantarray ? ($1,'name') : $1;
+        }
+        if ( $$ptr =~ /\G\s*(\d+\s\d+\sR\b)/gc ) {
+            return wantarray ? ($1,'ref') : $1;
+        }
+        if ( $$ptr =~ /\G\s*([-+]?\d+(?:\.\d+)?|[-+]?\.\d+)/gc ) {
+            return wantarray ? ($1,'number') : $1;
+        }
+        if ( $$ptr =~ /\G\s*(true|false)/gc ) {
+            return wantarray ? ($1,'bool') : $1;
+        }
+        if ( $$ptr =~ /\G\s*(null)/gc ) {
+            return wantarray ? ($1,'null') : $1;
+        }
+        if ( $$ptr =~ /\G\s*([^\/%\(\)\[\]<>{}\s]+)/gc ) {
+            return wantarray ? ($1,'operator') : $1;
+        }
+        if ( $$ptr =~ /\G\s*(\]|>>)/gc ) {
+            return wantarray ? ($1,'end_bracket') : $1;
+        }
+        if ( $$ptr =~ /\G\s*\%[^\n]*\n/gc ) {
+            # Comment
+            next;
+        }
+        if ( $$ptr =~ /\G\s*$/ ) {
             # EOF
-            return undef;
+            return wantarray ? (undef,undef) : undef;
         }
 
-        pos($$ptr) = $+[0]; # Advance the pointer
-
-        if ( substr($1,0,1) eq '%' ) {
-            # skip comments
-        } else {
-            return $1;
-        }
+        print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
+        croak "Unknown primitive at offset ".pos($$ptr);
 
     }
 
