@@ -47,30 +47,28 @@ sub page_end {
 
 }
 
-sub draw_shape {
-    my ($self,$shape,@params) = @_;
-    if ( $shape eq 'rect' ) {
-        my ($x,$y,$w,$h) = @params;
-        my $points = sprintf("%d,%d %d,%d",$self->transform($x,$y,$x+$w,$y+$h));
-        $self->{canvas}->Draw(primitive=>'rectangle', stroke=>'black', fill => 'none', points=>$points);
-    }
+sub rectangle {
+    my ($self,@params) = @_;
+    my ($x,$y,$w,$h) = @params;
+    my $points = sprintf("%d,%d %d,%d",$self->transform($x,$y,$x+$w,$y+$h));
+    $self->{canvas}->Draw(primitive=>'rectangle', stroke=>'black', fill => 'none', points=>$points);
 }
 
-sub move {
+sub path_move {
     my ($self,@pos) = @_;
     $self->{path} .= sprintf("M %d,%d ",$self->transform(@pos));
     $self->{pos} = [ @pos ];
 
 }
 
-sub line {
+sub path_line {
     my ($self,@pos) = @_;
     $self->{path} .= sprintf("L %d,%d ",$self->transform(@pos));
     $self->{pos} = [ @pos ];
 
 }
 
-sub curve {
+sub path_curve {
     my ($self,@pos) = @_;
     $pos[0] = $self->{pos}->[0] if !defined($pos[0]);
     $pos[1] = $self->{pos}->[1] if !defined($pos[1]);
@@ -81,33 +79,24 @@ sub curve {
     $self->{pos} = [ $pos[4] , $pos[5] ];
 }
 
-sub close_path {
+sub path_close {
     my ($self) = @_;
     $self->{path} .= 'Z ';
 }
 
-sub stroke {
-    my ($self) = @_;
+sub path_draw {
+    my ($self,$stroke,$fill) = @_;
     return unless defined($self->{path});
-    $self->{canvas}->Draw(primitive=>'path',stroke=>'black',fill=>'none',points=>$self->{path});
+    $self->{canvas}->Draw(
+        primitive=>'path',
+        stroke=> $stroke ? 'black' : 'none',
+        fill=> $fill ? 'black' : 'none',
+        points=>$self->{path}
+    );
     $self->{path} = '';
 }
 
-sub fill {
-    my ($self) = @_;
-    return unless defined($self->{path});
-    $self->{canvas}->Draw(primitive=>'path',stroke=>'black',fill=>'none',points=>$self->{path});
-    $self->{path} = '';
-}
-
-sub fill_and_stroke {
-    my ($self) = @_;
-    return unless defined($self->{path});
-    $self->{canvas}->Draw(primitive=>'path',stroke=>'black',fill=>'none',points=>$self->{path});
-    $self->{path} = '';
-}
-
-sub end_path {
+sub path_end {
     my ($self) = @_;
     $self->{path} = '';
 }

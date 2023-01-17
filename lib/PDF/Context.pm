@@ -2,6 +2,8 @@ use strict;
 use warnings FATAL => 'all';
 package PDF::Context;
 use Storable qw(dclone);
+use Data::Dumper;
+use Carp;
 
 sub new {
     my ($class) = @_;
@@ -41,17 +43,17 @@ sub restore_state {
 #   m4  m5  1           n4  n5  1
 #
 sub concat_matrix {
-    my ($self,$m) = @_;
+    my ($self,@m) = @_;
 
     my $n = $self->{gs}->{ctm};
-    
+
     $self->{gs}->{ctm} = [
-        $m->[0]*$n->[0] + $m->[1]*$n->[2],
-        $m->[0]*$n->[1] + $m->[1]*$n->[3],
-        $m->[2]*$n->[0] + $m->[3]*$n->[2],
-        $m->[2]*$n->[1] + $m->[3]*$n->[3],
-        $m->[4]*$n->[0] + $m->[5]*$n->[2] + $n->[4],
-        $m->[4]*$n->[1] + $m->[5]*$n->[3] + $n->[5]
+        $m[0]*$n->[0] + $m[1]*$n->[2],
+        $m[0]*$n->[1] + $m[1]*$n->[3],
+        $m[2]*$n->[0] + $m[3]*$n->[2],
+        $m[2]*$n->[1] + $m[3]*$n->[3],
+        $m[4]*$n->[0] + $m[5]*$n->[2] + $n->[4],
+        $m[4]*$n->[1] + $m[5]*$n->[3] + $n->[5]
     ];
 }
 

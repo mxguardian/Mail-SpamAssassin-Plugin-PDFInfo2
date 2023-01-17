@@ -296,6 +296,67 @@ sub _parse_contents {
     my $context = $self->{context};
     my @params;
 
+    # Build a dispatch table
+    my %dispatch = (
+        q  => sub { $context->save_state() },
+        Q  => sub { $context->restore_state() },
+        cm => sub { $context->concat_matrix(@_) },
+        Do => sub {
+            my $xobj = $page->{'/Resources'}->{'/XObject'}->{$_[0]};
+            if ( $xobj->{'/Subtype'} eq '/Image' ) {
+                $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
+            } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
+                $context->save_state();
+                $context->concat_matrix(@{$xobj->{'/Matrix'}});
+                $self->_parse_contents($xobj, $page);
+                $context->restore_state();
+            }
+        }
+    );
+
+    if ( $context->isa('PDF::Context::Image') ) {
+        $dispatch{re} = sub { $context->rectangle(@_) };
+        $dispatch{m}  = sub { $context->path_move(@_) };
+        $dispatch{l}  = sub { $context->path_line(@_) };
+        $dispatch{h}  = sub { $context->path_close() };
+        $dispatch{n}  = sub { $context->path_end() };
+        $dispatch{c}  = sub { $context->path_curve(@_) };
+        $dispatch{v}  = sub {
+            splice @_,0,0,undef,undef;
+            $context->path_curve(@_)
+        };
+        $dispatch{y}  = sub {
+            splice @_,2,0,undef,undef;
+            $context->path_curve(@_);
+        };
+        $dispatch{s}  = sub {
+            $context->path_close();
+            $context->path_draw(1,0);
+        };
+        $dispatch{S}    = sub { $context->path_draw(1,0) };
+        $dispatch{f}    = sub { $context->path_draw(0,'nonzero') };
+        $dispatch{'f*'} = sub { $context->path_draw(0,'evenodd') };
+        $dispatch{B}    = sub { $context->path_draw(1,'nonzero') };
+        $dispatch{'B*'} = sub { $context->path_draw(1,'evenodd') };
+    }
+
+    if ( $context->isa('PDF::Context::Text') ) {
+        $dispatch{Tf} = sub {
+            my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$_[0]});
+            my $cmap = PDF::CMap->new();
+            if (defined($font->{'/ToUnicode'})) {
+                # print "$font->{'/ToUnicode'}\n";
+                $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
+            }
+            $context->text_font($font, $cmap);
+        };
+        $dispatch{Tj} = sub { $context->text(@_) };
+        $dispatch{Td} = sub { $context->text_newline(@_) };
+        $dispatch{TD} = sub { $context->text_newline(@_) };
+        $dispatch{'T*'} = sub { $context->text_newline(@_) };
+    }
+
+    # Process commands
     for my $obj ( @$contents ) {
         my $stream = $self->_get_stream_data($obj);
         while () {
@@ -306,68 +367,8 @@ sub _parse_contents {
                 next;
             }
             debug('tokens',$token.' '.join(',',@params));
-            if ( $token eq 'q' ) {
-                $context->save_state();
-            } elsif ( $token eq 'Q') {
-                $context->restore_state();
-            } elsif ( $token eq 'cm' ) {
-                $context->concat_matrix(\@params);
-            } elsif ( $token eq 'Do' ) {
-                my $xobj = $page->{'/Resources'}->{'/XObject'}->{$params[0]};
-                if ( $xobj->{'/Subtype'} eq '/Image' ) {
-                    $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
-                } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
-                    $context->save_state();
-                    $context->concat_matrix($xobj->{'/Matrix'});
-                    $self->_parse_contents($xobj,$page);
-                    $context->restore_state();
-                }
-
-            } elsif ( $token eq 're' ) {
-                $context->draw_shape('rect',@params) if $self->{context}->can('draw_shape');
-            } elsif ( $token eq 'm' ) {
-                $context->move(@params) if $self->{context}->can('move');
-            } elsif ( $token eq 'l' ) {
-                $context->line(@params) if $self->{context}->can('line');
-            } elsif ( $token eq 'h' ) {
-                $context->close_path(@params) if $self->{context}->can('close_path');
-            } elsif ( $token eq 'n' ) {
-                $context->end_path(@params) if $self->{context}->can('end_path');
-            } elsif ( $token eq 'c' ) {
-                $context->curve(@params) if $self->{context}->can('curve');
-            } elsif ( $token eq 'v' ) {
-                splice @params,0,0,undef,undef;
-                $context->curve(@params) if $self->{context}->can('curve');
-            } elsif ( $token eq 'y' ) {
-                splice @params,2,0,undef,undef;
-                $context->curve(@params) if $self->{context}->can('curve');
-            } elsif ( $token eq 'S' ) {
-                $context->stroke(@params) if $self->{context}->can('stroke');
-            } elsif ( $token eq 's' ) {
-                $context->close_path(@params) if $self->{context}->can('close_path');
-                $context->stroke(@params) if $self->{context}->can('stroke');
-            } elsif ( $token eq 'f' or $token eq 'F' ) {
-                $context->fill('nonzero') if $self->{context}->can('fill');
-            } elsif ( $token eq 'f*' ) {
-                $context->fill('evenodd') if $self->{context}->can('fill');
-            } elsif ( $token eq 'B' ) {
-                $context->fill_and_stroke('nonzero') if $self->{context}->can('fill_and_stroke');
-            } elsif ( $token eq 'B*' ) {
-                $context->fill_and_stroke('evenodd') if $self->{context}->can('fill_and_stroke');
-
-            } elsif ( $token eq 'Tf' and $self->{context}->can('text_font') ) {
-                my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$params[0]});
-                my $cmap = PDF::CMap->new();
-                if ( defined($font->{'/ToUnicode'})) {
-                    # print "$font->{'/ToUnicode'}\n";
-                    $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
-                }
-                $context->text_font($font,$cmap);
-            } elsif ( $token eq 'Tj' ) {
-                $context->text(@params) if $self->{context}->can('text');
-            } elsif ( $token eq 'Td' || $token eq 'TD' || $token eq 'T*' ) {
-                $context->text_newline(@params) if $self->{context}->can('text_newline');
-
+            if ( defined($dispatch{$token}) ) {
+                $dispatch{$token}->(@params);
             } else {
                 # print "Skipping: $token\n";
             }
@@ -464,12 +465,6 @@ sub _get_stream_data {
 
     return $self->{stream_cache}->{$offset};
 
-}
-
-sub _bin2hex {
-    my $data = shift;
-    my $bytes = shift || length($data);
-    return unpack("H".$bytes*2, $data);
 }
 
 sub debug {
