@@ -69,7 +69,7 @@ sub parse {
     # Parse page tree
     $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
 
-    $self->{info}->{images}->{count} = grep { $self->{images}->{$_}->{type} eq 'image' } keys %{$self->{images}};
+    $self->{context}->parse_complete($self) if $self->{context}->can('parse_complete');
 
 }
 
@@ -303,6 +303,7 @@ sub _parse_contents {
         cm => sub { $context->concat_matrix(@_) },
         Do => sub {
             my $xobj = $page->{'/Resources'}->{'/XObject'}->{$_[0]};
+            $xobj->{_name} = $_[0];
             if ( $xobj->{'/Subtype'} eq '/Image' ) {
                 $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
             } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
@@ -454,13 +455,18 @@ sub _get_stream_data {
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
 
+    my $stream_data = substr($self->{data},$offset,$length);
+    if (defined($self->{core}->{crypt})) {
+        $stream_data = $self->{core}->{crypt}->decrypt($stream_data);
+    }
+
     if ( $filter eq '/FlateDecode' ) {
         my $f = PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
         $self->{stream_cache}->{$offset} = $f->decode(
-            substr($self->{data},$offset,$length)
+            $stream_data
         );
     } else {
-        $self->{stream_cache}->{$offset} = substr($self->{data},$offset,$length);
+        $self->{stream_cache}->{$offset} = $stream_data;
     }
 
     return $self->{stream_cache}->{$offset};

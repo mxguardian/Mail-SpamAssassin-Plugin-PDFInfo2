@@ -17,7 +17,7 @@ sub reset_state {
 
     # Graphics state
     $self->{gs} = {
-        ctm => [ 2, 0, 0, 2, 0, 0 ], # Current Transformation Matrix
+        ctm => [ 1, 0, 0, 1, 0, 0 ], # Current Transformation Matrix
         pos => [ 0, 0 ]
     };
 

@@ -43,6 +43,8 @@ sub draw_image {
 
     $self->{info}->{images}++;
 
+    # print $image->{_name},"\n";
+
     # Calculate image area in user space
     my $ctm = $self->{gs}->{ctm};
     if ( $ctm->[1] == 0 && $ctm->[2] == 0 ) {
@@ -56,6 +58,30 @@ sub draw_image {
 
 }
 
+sub parse_complete {
+    my ($self,$parser) = @_;
+
+    $self->{info}->{image_area} = sprintf(
+        "%.0f",
+        $self->{info}->{image_area}
+    );
+
+    $self->{info}->{page_area} = sprintf(
+        "%.0f",
+        $self->{info}->{page_area}
+    );
+
+    $self->{info}->{image_density} = sprintf(
+        "%.2f",
+        $self->{info}->{image_area} / $self->{info}->{page_area} * 100
+    );
+
+    for (keys %{$parser->{trailer}->{'/Info'}}) {
+        my $key = $_;
+        $key =~ s/^\///;
+        $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
+    }
+}
 
 
 1;

@@ -34,7 +34,7 @@ sub draw_image {
     my ($a,$b,$c,$d,$e,$f) = @{$self->{gs}->{ctm}};
 
     my $points = sprintf("%d,%d %d,%d",$self->transform(0,0,1,1));
-    $self->{canvas}->Draw(primitive=>'rectangle', fill=>'gray', points=>$points);
+    $self->{canvas}->Draw(primitive=>'rectangle', stroke=>'red',fill=>'gray', points=>$points);
 }
 
 sub page_end {
@@ -88,10 +88,10 @@ sub path_draw {
     my ($self,$stroke,$fill) = @_;
     return unless defined($self->{path});
     $self->{canvas}->Draw(
-        primitive=>'path',
-        stroke=> $stroke ? 'black' : 'none',
-        fill=> $fill ? 'black' : 'none',
-        points=>$self->{path}
+        primitive => 'path',
+        stroke    => 'black', #$stroke ? 'black' : 'none',
+        fill      => 'none', #$fill ? 'black' : 'none',
+        points    => $self->{path}
     );
     $self->{path} = '';
 }
