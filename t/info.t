@@ -9,19 +9,21 @@ my @tests = (
     {
         filename => 't/data/North Gaston HS flyer.pdf',
         expected => {
-            'Encrypted' => 0,
-            'Version' => '1.6',
-            'PageCount' => 4,
-            'Producer' => 'Adobe PDF Library 10.0.1',
-            'ModDate' => 'D:20221010104230-04\'00\'',
-            'Trapped' => '/False',
-            'PageArea' => 484704,
-            'Creator' => 'Adobe InDesign CS6 (Macintosh)',
-            'ImageArea' => 14293,
+            'Encrypted'    => 0,
+            'Version'      => '1.6',
+            'PageCount'    => 4,
+            'Producer'     => 'Adobe PDF Library 10.0.1',
+            'ModDate'      => 'D:20221010104230-04\'00\'',
+            'Trapped'      => '/False',
+            'PageArea'     => 484704,
+            'Creator'      => 'Adobe InDesign CS6 (Macintosh)',
+            'ImageArea'    => 14293,
             'CreationDate' => 'D:20221010092750-05\'00\'',
-            'ImageCount' => 2,
-            'Title' => '',
-            'ImageDensity' => '2.95'
+            'ImageCount'   => 2,
+            'Title'        => '',
+            'ImageDensity' => '2.95',
+            'LinkCount'    => 0,
+            'uris'         => {},
         }
     },
     {
@@ -41,7 +43,9 @@ my @tests = (
             'Title' => '',
             'PageArea' => 501170,
             'Subject' => '',
-            'CreationDate' => 'D:20200724162630-05\'00\''
+            'CreationDate' => 'D:20200724162630-05\'00\'',
+            'LinkCount'    => 0,
+            'uris'         => {},
         }
     },
     {
@@ -57,7 +61,11 @@ my @tests = (
             'ImageArea' => 337055,
             'Title' => '',
             'Producer' => 'Qt 4.8.7',
-            'ImageDensity' => '67.28'
+            'ImageDensity' => '67.28',
+            'LinkCount'    => 1,
+            'uris' => {
+                'https://bit.ly/3PVE5IZ' => 1
+            },
         }
     },
     {
@@ -72,7 +80,11 @@ my @tests = (
             'PageArea' => 484704,
             'CreationDate' => 'D:20221206220444-08\'00\'',
             'PageCount' => 1,
-            'Author' => 'jjj'
+            'Author' => 'jjj',
+            'LinkCount'    => 1,
+            'uris' => {
+                'https://s.id/1tzdg' => 1
+            },
         }
     },
     {
@@ -88,6 +100,10 @@ my @tests = (
             'PageCount'    => 1,
             'Title'        => 'Adobe Document Cloud',
             'Producer'     => 'FPDF 1.85',
+            'LinkCount'    => 1,
+            'uris' => {
+                'http://gkjdepok.org/docdir/SCANS_PP2849.zip' => 1
+            },
         }
     },
     {
@@ -104,7 +120,34 @@ my @tests = (
             'Creator' => 'Microsoft® Word for Microsoft 365',
             'PageArea' => 501212,
             'ImageArea' => 92587,
-            'ModDate' => 'D:20221221152022+00\'00\''
+            'ModDate' => 'D:20221221152022+00\'00\'',
+            'LinkCount'    => 2,
+            'uris' => {
+                'https://sgef.collstreampay.co.uk/sgef/' => 1,
+                'http://www.equipmentfinance.societegenerale.co.uk/' => 1
+            },
+        }
+    },
+    {
+        filename => 't/data/CamScanner.pdf',
+        expected => {
+            'Encrypted' => 0,
+            'PageCount' => 1,
+            'Producer' => 'intsig.com pdf producer',
+            'Author' => 'CamScanner',
+            'ImageDensity' => '92.06',
+            'Subject' => 'CamScanner 01-02-2023 12.41',
+            'PageArea' => 500990,
+            'Title' => 'CamScanner 01-02-2023 12.41',
+            'Version' => '1.7',
+            'ImageCount' => 2,
+            'ImageArea' => 461221,
+            'Keywords' => '',
+            'ModDate' => '',
+            'LinkCount'    => 1,
+            'uris' => {
+                'https://digital-camscanner.onelink.me/P3GL/w1r4frhy' => 1
+            },
         }
     },
 );

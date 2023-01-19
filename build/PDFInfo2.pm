@@ -292,7 +292,9 @@ sub new {
         ImageCount => 0,
         PageCount  => 0,
         PageArea   => 0,
-        ImageArea  => 0
+        ImageArea  => 0,
+        LinkCount  => 0,
+        uris       => {}
     };
     $self;
 }
@@ -334,6 +336,14 @@ sub draw_image {
         my ($x1,$y1,$x2,$y2) = $self->transform(0,0,1,1);
         $self->{info}->{ImageArea} += abs($x2-$x1) * abs($y2-$y1);
     }
+
+}
+
+sub uri {
+    my ($self,$location) = @_;
+
+    $self->{info}->{uris}->{$location} = 1;
+    $self->{info}->{LinkCount}++;
 
 }
 
@@ -716,15 +726,6 @@ sub parse {
 
     $self->{version} = $1;
     $self->{data} = $data;
-    $self->{info} = {
-        links  => 0,
-        uris   => {},
-        pages  => 0,
-        images => {
-            count => 0,
-            area  => 0,
-        },
-    };
 
     # Parse cross-reference table (and trailer)
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
@@ -931,9 +932,8 @@ sub _parse_action {
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
-        if ( $location =~ /^https?:\/\// ) {
-            $self->{info}->{uris}->{$location} = 1;
-            $self->{info}->{links}++;
+        if ( $location =~ /^\w+:\/\// ) {
+            $self->{context}->uri($location) if $self->{context}->can('uri');
         }
     }
 
@@ -1243,6 +1243,9 @@ sub new {
     $self->register_eval_rule ("pdf_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     # $self->register_eval_rule ("pdf_is_empty_body", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    # $self->register_eval_rule ("pdf_words", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
     $self->register_method_priority ("parsed_metadata", -1);
@@ -1467,6 +1470,23 @@ sub pdf_match_md5 {
 #     return 1 if exists $pms->{pdfinfo}->{fuzzy_md5}->{uc $md5};
 #     return 0;
 # }
+
+sub pdf_link_count {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{LinkCount});
+}
+
+sub pdf_words {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+}
+
+sub pdf_page_count {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{PageCount});
+}
 
 sub pdf_match_details {
     my ($self, $pms, $body, $detail, $regex) = @_;

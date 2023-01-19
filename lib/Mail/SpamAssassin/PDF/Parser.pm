@@ -39,15 +39,6 @@ sub parse {
 
     $self->{version} = $1;
     $self->{data} = $data;
-    $self->{info} = {
-        links  => 0,
-        uris   => {},
-        pages  => 0,
-        images => {
-            count => 0,
-            area  => 0,
-        },
-    };
 
     # Parse cross-reference table (and trailer)
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
@@ -254,9 +245,8 @@ sub _parse_action {
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
-        if ( $location =~ /^https?:\/\// ) {
-            $self->{info}->{uris}->{$location} = 1;
-            $self->{info}->{links}++;
+        if ( $location =~ /^\w+:\/\// ) {
+            $self->{context}->uri($location) if $self->{context}->can('uri');
         }
     }
 

@@ -66,6 +66,9 @@ sub new {
     $self->register_eval_rule ("pdf_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     # $self->register_eval_rule ("pdf_is_empty_body", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    # $self->register_eval_rule ("pdf_words", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
     $self->register_method_priority ("parsed_metadata", -1);
@@ -290,6 +293,23 @@ sub pdf_match_md5 {
 #     return 1 if exists $pms->{pdfinfo}->{fuzzy_md5}->{uc $md5};
 #     return 0;
 # }
+
+sub pdf_link_count {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{LinkCount});
+}
+
+sub pdf_words {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+}
+
+sub pdf_page_count {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{PageCount});
+}
 
 sub pdf_match_details {
     my ($self, $pms, $body, $detail, $regex) = @_;

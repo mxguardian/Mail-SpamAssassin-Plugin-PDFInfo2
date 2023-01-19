@@ -13,7 +13,9 @@ sub new {
         ImageCount => 0,
         PageCount  => 0,
         PageArea   => 0,
-        ImageArea  => 0
+        ImageArea  => 0,
+        LinkCount  => 0,
+        uris       => {}
     };
     $self;
 }
@@ -55,6 +57,14 @@ sub draw_image {
         my ($x1,$y1,$x2,$y2) = $self->transform(0,0,1,1);
         $self->{info}->{ImageArea} += abs($x2-$x1) * abs($y2-$y1);
     }
+
+}
+
+sub uri {
+    my ($self,$location) = @_;
+
+    $self->{info}->{uris}->{$location} = 1;
+    $self->{info}->{LinkCount}++;
 
 }
 
