@@ -1,14 +1,16 @@
 use strict;
 use warnings;
 use Test::More;
-use PDF::Parser;
-use PDF::Context::Info;
+use Mail::SpamAssassin::PDF::Parser;
+use Mail::SpamAssassin::PDF::Context::Info;
 use Data::Dumper;
 
 my @tests = (
     {
         filename => 't/data/North Gaston HS flyer.pdf',
         expected => {
+            'Encrypted' => 0,
+            'Version' => '1.6',
             'PageCount' => 4,
             'Producer' => 'Adobe PDF Library 10.0.1',
             'ModDate' => 'D:20221010104230-04\'00\'',
@@ -25,6 +27,8 @@ my @tests = (
     {
         filename => 't/data/how_to_manage_club_members_en.pdf',
         expected   => {
+            'Encrypted' => 0,
+            'Version' => '1.5',
             'Producer' => 'Foxit PhantomPDF Printer Version 9.1.0.0531',
             'ImageCount' => 12,
             'PageCount' => 8,
@@ -41,8 +45,10 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Profile_with_photo_and_videos_from_Gianna-4267fZmSNyvIvbc.pdf',
+        filename => 't/data/Encrypted.pdf',
         expected => {
+            'Encrypted' => 1,
+            'Version' => '1.4',
             'CreationDate' => 'D:20230106154216+03\'00\'',
             'Creator' => 'wkhtmltopdf 0.12.5',
             'PageCount' => 2,
@@ -55,8 +61,10 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Doc2 (1).pdf',
+        filename => 't/data/Phishing.pdf',
         expected => {
+            'Encrypted' => 0,
+            'Version' => '1.5',
             'ImageDensity' => '33.08',
             'ModDate' => 'D:20221206220444-08\'00\'',
             'ImageCount' => 1,
@@ -68,8 +76,25 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/9221092480 NB Settlement Quote.pdf',
+        filename => 't/data/Phishing2.pdf',
         expected => {
+            'Encrypted'    => 0,
+            'Version'      => '1.3',
+            'ImageDensity' => '100.00',
+            'ImageCount'   => 1,
+            'ImageArea'    => 501160,
+            'PageArea'     => 501160,
+            'CreationDate' => 'D:19700101030000+03\'00\'',
+            'PageCount'    => 1,
+            'Title'        => 'Adobe Document Cloud',
+            'Producer'     => 'FPDF 1.85',
+        }
+    },
+    {
+        filename => 't/data/SlicedImages.pdf',
+        expected => {
+            'Encrypted' => 0,
+            'Version' => '1.7',
             'PageCount' => 1,
             'ImageDensity' => '18.47',
             'Author' => 'Tom Orkney',
@@ -87,8 +112,8 @@ my @tests = (
 plan tests => scalar(@tests);
 
 for my $test (@tests) {
-    my $context = PDF::Context::Info->new();
-    my $pdf = PDF::Parser->new(
+    my $context = Mail::SpamAssassin::PDF::Context::Info->new();
+    my $pdf = Mail::SpamAssassin::PDF::Parser->new(
         context => $context
     );
 

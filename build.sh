@@ -1,21 +1,24 @@
 #!/usr/bin/sh
+#
+# This script concatenates all the source files into a single plugin file in the build directory
+#
 
-PDFINFO=build/PDFInfo2.pm
+OUTFILE=build/PDFInfo2.pm
 
-cp /dev/null $PDFINFO
+cp /dev/null $OUTFILE
 
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Core.pm >>$PDFINFO
-echo >>$PDFINFO
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Context.pm >>$PDFINFO
-echo >>$PDFINFO
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Context/Info.pm >>$PDFINFO
-echo >>$PDFINFO
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/Decrypt.pm >>$PDFINFO
-echo >>$PDFINFO
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/FlateDecode.pm >>$PDFINFO
-echo >>$PDFINFO
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Parser.pm >>$PDFINFO
-echo >>$PDFINFO
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$PDFINFO
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Core.pm >>$OUTFILE
+echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Context.pm >>$OUTFILE
+echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Context/Info.pm >>$OUTFILE
+echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/Decrypt.pm >>$OUTFILE
+echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/FlateDecode.pm >>$OUTFILE
+echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Parser.pm >>$OUTFILE
+echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
 
 

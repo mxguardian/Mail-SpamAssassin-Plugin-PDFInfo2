@@ -13,7 +13,7 @@ use Pod::Usage;
  images.pl <PDF_FILE>
 
  Creates an image for each page
- 
+
 =cut
 
 my %opts;
