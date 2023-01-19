@@ -8,6 +8,19 @@ use Data::Dumper;
 use Getopt::Std;
 use Pod::Usage;
 
+=head1 SYNOPSIS
+
+ dump.pl <PDF_FILE>
+
+ Options
+   -o   <OBJECT_NUMBER>     Dump object dictionary
+   -s   <OBJECT_NUMBER>     Dump object stream
+   -g   <PATTERN>           Dump all objects containing <PATTERN>
+
+ If called without any options, dumps the trailer dictionary
+
+=cut
+
 my %opts;
 getopts('g:o:s:',\%opts);
 
