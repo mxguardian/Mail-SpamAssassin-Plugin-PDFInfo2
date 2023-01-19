@@ -1,6 +1,6 @@
+package PDF::Context;
 use strict;
 use warnings FATAL => 'all';
-package PDF::Context;
 use Storable qw(dclone);
 use Data::Dumper;
 use Carp;

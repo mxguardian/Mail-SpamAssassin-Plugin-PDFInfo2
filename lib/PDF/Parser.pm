@@ -83,6 +83,18 @@ sub get_image_count {
     scalar(keys %{$self->{images}});
 }
 
+sub version {
+    shift->{version};
+}
+
+sub info {
+    shift->{trailer}->{'/Info'};
+}
+
+sub is_encrypted {
+    defined(shift->{trailer}->{'/Encrypt'}) ? 1 : 0;
+}
+
 ###################
 # Private methods
 ###################

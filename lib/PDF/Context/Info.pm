@@ -10,10 +10,10 @@ sub new {
     my $class = shift;
     my $self = $class->SUPER::new(@_);
     $self->{info} = {
-        images     => 0,
-        pages      => 0,
-        page_area  => 0,
-        image_area => 0
+        ImageCount => 0,
+        PageCount  => 0,
+        PageArea   => 0,
+        ImageArea  => 0
     };
     $self;
 }
@@ -26,12 +26,12 @@ sub get_info {
 sub page_begin {
     my ($self, $page) = @_;
 
-    $self->{info}->{pages}++;
+    $self->{info}->{PageCount}++;
 
     return 0 unless $page->{page_number} == 1;
 
     # Calculate page area in user space
-    $self->{info}->{page_area} +=
+    $self->{info}->{PageArea} +=
         ($page->{'/MediaBox'}->[2] - $page->{'/MediaBox'}->[0]) *
         ($page->{'/MediaBox'}->[3] - $page->{'/MediaBox'}->[1]);
 
@@ -41,19 +41,19 @@ sub page_begin {
 sub draw_image {
     my ($self,$image,$page) = @_;
 
-    $self->{info}->{images}++;
+    $self->{info}->{ImageCount}++;
 
     # print $image->{_name},"\n";
 
     # Calculate image area in user space
     my $ctm = $self->{gs}->{ctm};
     if ( $ctm->[1] == 0 && $ctm->[2] == 0 ) {
-        $self->{info}->{image_area} += $ctm->[0] * $ctm->[3];
+        $self->{info}->{ImageArea} += $ctm->[0] * $ctm->[3];
     } else {
         # Image is rotated, skewed, etc. More complicated
         # The following should be accurate for rotated images but just an approximation for other transformations
         my ($x1,$y1,$x2,$y2) = $self->transform(0,0,1,1);
-        $self->{info}->{image_area} += abs($x2-$x1) * abs($y2-$y1);
+        $self->{info}->{ImageArea} += abs($x2-$x1) * abs($y2-$y1);
     }
 
 }
@@ -61,26 +61,30 @@ sub draw_image {
 sub parse_complete {
     my ($self,$parser) = @_;
 
-    $self->{info}->{image_area} = sprintf(
+    $self->{info}->{ImageArea} = sprintf(
         "%.0f",
-        $self->{info}->{image_area}
+        $self->{info}->{ImageArea}
     );
 
-    $self->{info}->{page_area} = sprintf(
+    $self->{info}->{PageArea} = sprintf(
         "%.0f",
-        $self->{info}->{page_area}
+        $self->{info}->{PageArea}
     );
 
-    $self->{info}->{image_density} = sprintf(
+    $self->{info}->{ImageDensity} = sprintf(
         "%.2f",
-        $self->{info}->{image_area} / $self->{info}->{page_area} * 100
+        $self->{info}->{ImageArea} / $self->{info}->{PageArea} * 100
     );
 
     for (keys %{$parser->{trailer}->{'/Info'}}) {
         my $key = $_;
-        $key =~ s/^\///;
+        $key =~ s/^\///; # Trim leading slash
         $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
     }
+
+    $self->{info}->{Encrypted} = defined($parser->{trailer}->{'/Encrypt'}) ? 1 : 0;
+    $self->{info}->{Version} = $parser->{version};
+
 }
 
 

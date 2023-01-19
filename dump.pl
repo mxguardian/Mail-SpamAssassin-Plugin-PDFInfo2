@@ -9,7 +9,7 @@ use Getopt::Std;
 use Pod::Usage;
 
 my %opts;
-getopts('g:o:s:t',\%opts);
+getopts('g:o:s:',\%opts);
 
 my ($file) = @ARGV;
 pod2usage() unless defined $file;
@@ -31,23 +31,17 @@ if ( defined $opts{o} ) {
     my $ref = $opts{o};
     $ref = "$ref 0 R";
     print Dumper($pdf->_get_obj($ref));
-}
-
-if ( defined $opts{s} ) {
+} elsif ( defined $opts{s} ) {
     my $ref = $opts{s};
     $ref = "$ref 0 R";
     print Dumper($pdf->_get_stream_data($ref));
-}
-
-if ( defined $opts{t} ) {
-    print Dumper($pdf->{trailer});
-}
-
-if ( defined $opts{g} ) {
+} elsif ( defined $opts{g} ) {
     for my $ref (keys %{ $pdf->{xref} }) {
         my $obj = $pdf->_get_obj($ref);
         my $str = Dumper($obj);
         print "$ref\n$str\n" if $str =~ qr/$opts{g}/;
     }
+} else  {
+    print Dumper($pdf->{trailer});
 }
 
