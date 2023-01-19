@@ -1,7 +1,7 @@
-package PDF::CMap;
+package Mail::SpamAssassin::PDF::CMap;
 use strict;
 use warnings FATAL => 'all';
-use PDF::Core;
+use Mail::SpamAssassin::PDF::Core;
 use Encode qw(encode decode);
 use Carp;
 use Data::Dumper;
@@ -9,7 +9,7 @@ use Data::Dumper;
 sub new {
     my ($class) = @_;
     bless {
-        core => PDF::Core->new(),
+        core => Mail::SpamAssassin::PDF::Core->new(),
         cmap => {}
     },$class;
 }

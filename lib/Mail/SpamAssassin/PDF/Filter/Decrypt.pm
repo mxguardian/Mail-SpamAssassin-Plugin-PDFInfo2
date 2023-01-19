@@ -1,4 +1,4 @@
-package PDF::Filter::Decrypt;
+package Mail::SpamAssassin::PDF::Filter::Decrypt;
 use strict;
 use warnings FATAL => 'all';
 use Digest::MD5;

@@ -1,4 +1,4 @@
-package PDF::Context;
+package Mail::SpamAssassin::PDF::Context;
 use strict;
 use warnings FATAL => 'all';
 use Storable qw(dclone);

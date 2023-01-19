@@ -1,11 +1,11 @@
 use strict;
 use warnings FATAL => 'all';
-package PDF::Context::Text;
-use PDF::Context;
+package Mail::SpamAssassin::PDF::Context::Text;
+use Mail::SpamAssassin::PDF::Context;
 use Encode qw(from_to);
 use Data::Dumper;
 
-our @ISA = qw(PDF::Context);
+our @ISA = qw(Mail::SpamAssassin::PDF::Context);
 
 sub new {
     my $class = shift;

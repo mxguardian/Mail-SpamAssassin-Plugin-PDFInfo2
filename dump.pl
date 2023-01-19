@@ -2,8 +2,8 @@
 use lib './lib';
 use strict;
 use warnings FATAL => 'all';
-use PDF::Parser;
-use PDF::Context::Info;
+use Mail::SpamAssassin::PDF::Parser;
+use Mail::SpamAssassin::PDF::Context::Info;
 use Data::Dumper;
 use Getopt::Std;
 use Pod::Usage;
@@ -19,9 +19,9 @@ local $/ = undef;
 my $data = <$fh>;
 close $fh;
 
-my $context = PDF::Context::Info->new();
+my $context = Mail::SpamAssassin::PDF::Context::Info->new();
 
-my $pdf = PDF::Parser->new(
+my $pdf = Mail::SpamAssassin::PDF::Parser->new(
     context         => $context
 );
 

@@ -25,7 +25,7 @@ Mail::SpamAssassin::Plugin::PDFInfo2 - PDFInfo2 Plugin for SpamAssassin
 
 =head1 DESCRIPTION
 
-This plugin helps detected spam using attached PDF files
+This plugin helps detect spam using attached PDF files
 
 =cut
 
@@ -108,8 +108,8 @@ sub parsed_metadata {
         $pms->{pdfinfo}->{totals}->{FileCount}++;
 
         # Parse PDF
-        my $pdf = PDF::Parser->new(
-            context  => PDF::Context::Info->new
+        my $pdf = Mail::SpamAssassin::PDF::Parser->new(
+            context  => Mail::SpamAssassin::PDF::Context::Info->new
         );
         my $info = eval {
             $pdf->parse($data);

@@ -1,10 +1,10 @@
-package PDF::Context::Info;
+package Mail::SpamAssassin::PDF::Context::Info;
 use strict;
 use warnings FATAL => 'all';
-use PDF::Context;
+use Mail::SpamAssassin::PDF::Context;
 use Data::Dumper;
 
-our @ISA = qw(PDF::Context);
+our @ISA = qw(Mail::SpamAssassin::PDF::Context);
 
 sub new {
     my $class = shift;

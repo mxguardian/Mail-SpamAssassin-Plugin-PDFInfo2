@@ -1,10 +1,10 @@
-package PDF::Parser;
+package Mail::SpamAssassin::PDF::Parser;
 use strict;
 use warnings FATAL => 'all';
-use PDF::Core;
-use PDF::Filter::FlateDecode;
-use PDF::Filter::Decrypt;
-use PDF::CMap;
+use Mail::SpamAssassin::PDF::Core;
+use Mail::SpamAssassin::PDF::Filter::FlateDecode;
+use Mail::SpamAssassin::PDF::Filter::Decrypt;
+use Mail::SpamAssassin::PDF::CMap;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
@@ -19,7 +19,7 @@ sub new {
         trailer      => {},
         pages        => [],
         images       => {},
-        core         => PDF::Core->new(),
+        core         => Mail::SpamAssassin::PDF::Core->new(),
 
         context      => $opts{context},
 
@@ -189,7 +189,7 @@ sub _parse_encrypt {
         die "Encryption filter $encrypt->{'/Filter'} not implemented";
     }
 
-    $self->{core}->{crypt} = PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
+    $self->{core}->{crypt} = Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
 
 }
 
@@ -300,11 +300,11 @@ sub _parse_xobject {
 
 sub _parse_contents {
     my ($self,$contents,$page) = @_;
-    my $core = PDF::Core->new;
+    my $core = Mail::SpamAssassin::PDF::Core->new;
 
     $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
 
-    #@type PDF::Context
+    #@type Mail::SpamAssassin::PDF::Context
     my $context = $self->{context};
     my @params;
 
@@ -327,7 +327,7 @@ sub _parse_contents {
         }
     );
 
-    if ( $context->isa('PDF::Context::Image') ) {
+    if ( $context->isa('Mail::SpamAssassin::PDF::Context::Image') ) {
         $dispatch{re} = sub { $context->rectangle(@_) };
         $dispatch{m}  = sub { $context->path_move(@_) };
         $dispatch{l}  = sub { $context->path_line(@_) };
@@ -353,10 +353,10 @@ sub _parse_contents {
         $dispatch{'B*'} = sub { $context->path_draw(1,'evenodd') };
     }
 
-    if ( $context->isa('PDF::Context::Text') ) {
+    if ( $context->isa('Mail::SpamAssassin::PDF::Context::Text') ) {
         $dispatch{Tf} = sub {
             my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$_[0]});
-            my $cmap = PDF::CMap->new();
+            my $cmap = Mail::SpamAssassin::PDF::CMap->new();
             if (defined($font->{'/ToUnicode'})) {
                 # print "$font->{'/ToUnicode'}\n";
                 $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
@@ -473,7 +473,7 @@ sub _get_stream_data {
     }
 
     if ( $filter eq '/FlateDecode' ) {
-        my $f = PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+        my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
         $self->{stream_cache}->{$offset} = $f->decode(
             $stream_data
         );

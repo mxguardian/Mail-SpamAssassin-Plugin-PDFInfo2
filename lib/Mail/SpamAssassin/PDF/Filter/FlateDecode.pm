@@ -1,4 +1,4 @@
-package PDF::Filter::FlateDecode;
+package Mail::SpamAssassin::PDF::Filter::FlateDecode;
 use strict;
 use warnings FATAL => 'all';
 use Compress::Zlib;

@@ -1,4 +1,4 @@
-package PDF::Core;
+package Mail::SpamAssassin::PDF::Core;
 use strict;
 use warnings FATAL => 'all';
 use Encode qw(from_to decode);
@@ -190,7 +190,7 @@ sub unquote_name {
 }
 
 1;
-package PDF::Context;
+package Mail::SpamAssassin::PDF::Context;
 use strict;
 use warnings FATAL => 'all';
 use Storable qw(dclone);
@@ -278,12 +278,12 @@ sub transform {
 }
 
 1;
-package PDF::Context::Info;
+package Mail::SpamAssassin::PDF::Context::Info;
 use strict;
 use warnings FATAL => 'all';
 use Data::Dumper;
 
-our @ISA = qw(PDF::Context);
+our @ISA = qw(Mail::SpamAssassin::PDF::Context);
 
 sub new {
     my $class = shift;
@@ -368,7 +368,7 @@ sub parse_complete {
 
 
 1;
-package PDF::Filter::Decrypt;
+package Mail::SpamAssassin::PDF::Filter::Decrypt;
 use strict;
 use warnings FATAL => 'all';
 use Digest::MD5;
@@ -619,7 +619,7 @@ sub _hex {
 
 1;
 
-package PDF::Filter::FlateDecode;
+package Mail::SpamAssassin::PDF::Filter::FlateDecode;
 use strict;
 use warnings FATAL => 'all';
 use Compress::Zlib;
@@ -679,7 +679,7 @@ sub decode {
 }
 
 1;
-package PDF::Parser;
+package Mail::SpamAssassin::PDF::Parser;
 use strict;
 use warnings FATAL => 'all';
 use Digest::MD5 qw(md5_hex);
@@ -696,7 +696,7 @@ sub new {
         trailer      => {},
         pages        => [],
         images       => {},
-        core         => PDF::Core->new(),
+        core         => Mail::SpamAssassin::PDF::Core->new(),
 
         context      => $opts{context},
 
@@ -866,7 +866,7 @@ sub _parse_encrypt {
         die "Encryption filter $encrypt->{'/Filter'} not implemented";
     }
 
-    $self->{core}->{crypt} = PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
+    $self->{core}->{crypt} = Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
 
 }
 
@@ -977,11 +977,11 @@ sub _parse_xobject {
 
 sub _parse_contents {
     my ($self,$contents,$page) = @_;
-    my $core = PDF::Core->new;
+    my $core = Mail::SpamAssassin::PDF::Core->new;
 
     $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
 
-    #@type PDF::Context
+    #@type Mail::SpamAssassin::PDF::Context
     my $context = $self->{context};
     my @params;
 
@@ -1004,7 +1004,7 @@ sub _parse_contents {
         }
     );
 
-    if ( $context->isa('PDF::Context::Image') ) {
+    if ( $context->isa('Mail::SpamAssassin::PDF::Context::Image') ) {
         $dispatch{re} = sub { $context->rectangle(@_) };
         $dispatch{m}  = sub { $context->path_move(@_) };
         $dispatch{l}  = sub { $context->path_line(@_) };
@@ -1030,10 +1030,10 @@ sub _parse_contents {
         $dispatch{'B*'} = sub { $context->path_draw(1,'evenodd') };
     }
 
-    if ( $context->isa('PDF::Context::Text') ) {
+    if ( $context->isa('Mail::SpamAssassin::PDF::Context::Text') ) {
         $dispatch{Tf} = sub {
             my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$_[0]});
-            my $cmap = PDF::CMap->new();
+            my $cmap = Mail::SpamAssassin::PDF::CMap->new();
             if (defined($font->{'/ToUnicode'})) {
                 # print "$font->{'/ToUnicode'}\n";
                 $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
@@ -1150,7 +1150,7 @@ sub _get_stream_data {
     }
 
     if ( $filter eq '/FlateDecode' ) {
-        my $f = PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+        my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
         $self->{stream_cache}->{$offset} = $f->decode(
             $stream_data
         );
@@ -1202,7 +1202,7 @@ Mail::SpamAssassin::Plugin::PDFInfo2 - PDFInfo2 Plugin for SpamAssassin
 
 =head1 DESCRIPTION
 
-This plugin helps detected spam using attached PDF files
+This plugin helps detect spam using attached PDF files
 
 =cut
 
@@ -1285,8 +1285,8 @@ sub parsed_metadata {
         $pms->{pdfinfo}->{totals}->{FileCount}++;
 
         # Parse PDF
-        my $pdf = PDF::Parser->new(
-            context  => PDF::Context::Info->new
+        my $pdf = Mail::SpamAssassin::PDF::Parser->new(
+            context  => Mail::SpamAssassin::PDF::Context::Info->new
         );
         my $info = eval {
             $pdf->parse($data);

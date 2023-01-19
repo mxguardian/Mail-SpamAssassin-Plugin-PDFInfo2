@@ -1,4 +1,4 @@
-package PDF::Core;
+package Mail::SpamAssassin::PDF::Core;
 use strict;
 use warnings FATAL => 'all';
 use Encode qw(from_to decode);

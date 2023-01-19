@@ -1,10 +1,10 @@
 use strict;
 use warnings FATAL => 'all';
-package PDF::Context::Image;
-use PDF::Context;
+package Mail::SpamAssassin::PDF::Context::Image;
+use Mail::SpamAssassin::PDF::Context;
 use Image::Magick;
 
-our @ISA = qw(PDF::Context);
+our @ISA = qw(Mail::SpamAssassin::PDF::Context);
 
 sub new {
     my $class = shift;
