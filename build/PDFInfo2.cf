@@ -12,6 +12,9 @@ score   PDF_IMAGE_COUNT 0.001
 body    PDF_LINK_COUNT  eval:pdf_link_count(1,1)
 score   PDF_LINK_COUNT  0.001
 
+body    PDF_WORD_COUNT  eval:pdf_word_count(1,10)
+score   PDF_WORD_COUNT  0.001
+
 body    PDF_NAMED       eval:pdf_named('Invoice.pdf')
 score   PDF_NAMED       0.001
 

@@ -40,6 +40,7 @@ use strict;
 use warnings;
 use re 'taint';
 use Digest::MD5 qw(md5_hex);
+use Data::Dumper;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
@@ -67,7 +68,7 @@ sub new {
     $self->register_eval_rule ("pdf_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     # $self->register_eval_rule ("pdf_is_empty_body", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_words", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf_word_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
@@ -123,9 +124,14 @@ sub parsed_metadata {
             next;
         }
 
+        # Get word count (requires ExtractText to have already extracted text from the PDF)
+        my $text = $p->rendered() || '';
+        $info->{WordCount} = scalar(split(/\s+/, $text));
+
         $pms->{pdfinfo}->{files}->{$name} = $info;
         $pms->{pdfinfo}->{totals}->{ImageCount} += $info->{ImageCount};
         $pms->{pdfinfo}->{totals}->{PageCount} += $info->{PageCount};
+        $pms->{pdfinfo}->{totals}->{WordCount} += $info->{WordCount};
         $pms->{pdfinfo}->{totals}->{ImageArea} += $info->{ImageArea};
         $pms->{pdfinfo}->{totals}->{PageArea} += $info->{PageArea};
         $pms->{pdfinfo}->{totals}->{Encrypted} += $info->{Encrypted};
@@ -300,9 +306,10 @@ sub pdf_link_count {
     return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{LinkCount});
 }
 
-sub pdf_words {
+sub pdf_word_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
+    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{WordCount});
 }
 
 sub pdf_page_count {
