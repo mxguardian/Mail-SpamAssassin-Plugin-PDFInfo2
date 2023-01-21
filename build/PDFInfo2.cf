@@ -1,31 +1,4 @@
 loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2     PDFInfo2.pm
 
-body    PDF_COUNT       eval:pdf_count(1,1)
-score   PDF_COUNT       0.001
-
-body    PDF_PAGE_COUNT  eval:pdf_page_count(1,1)
-score   PDF_PAGE_COUNT  0.001
-
-body    PDF_IMAGE_COUNT eval:pdf_image_count(1,1)
-score   PDF_IMAGE_COUNT 0.001
-
-body    PDF_LINK_COUNT  eval:pdf_link_count(1,1)
-score   PDF_LINK_COUNT  0.001
-
-body    PDF_WORD_COUNT  eval:pdf_word_count(1,10)
-score   PDF_WORD_COUNT  0.001
-
-body    PDF_NAMED       eval:pdf_named('Invoice.pdf')
-score   PDF_NAMED       0.001
-
-body    PDF_NAME_REGEX  eval:pdf_name_regex('/invoice/i')
-score   PDF_NAME_REGEX  0.001
-
-body    PDF_ENCRYPTED   eval:pdf_is_encrypted()
-score   PDF_ENCRYPTED   0.001
-
-body    PDF_DETAILS     eval:pdf_match_details('Title','/paypal/')
-score   PDF_DETAILS     0.001
-
-body    PDF_MD5         eval:pdf_match_md5('b3bf38c48788a8aa6e4f37190852f40e')
-score   PDF_MD5         0.001
+body  PDF_FUZZY_MD5  eval:pdf2_match_fuzzy_md5('39992a88a8ecc4cf9d9ae7025859bfc8')
+score PDF_FUZZY_MD5  0.001

@@ -16,18 +16,19 @@ use Pod::Usage;
    -o   <OBJECT_NUMBER>     Dump object dictionary
    -s   <OBJECT_NUMBER>     Dump object stream
    -g   <PATTERN>           Dump all objects containing <PATTERN>
+   -f                       Dump fuzzy checksum
 
  If called without any options, dumps the trailer dictionary
 
 =cut
 
 my %opts;
-getopts('g:o:s:',\%opts);
+getopts('fg:o:s:',\%opts);
 
 my ($file) = @ARGV;
 pod2usage() unless defined $file;
 
-open my $fh, '<', $file or die;
+open my $fh, '<', $file or die "Error opening $file: $!";
 local $/ = undef;
 my $data = <$fh>;
 close $fh;
@@ -54,6 +55,9 @@ if ( defined $opts{o} ) {
         my $str = Dumper($obj);
         print "$ref\n$str\n" if $str =~ qr/$opts{g}/;
     }
+} elsif ( defined($opts{f}) ) {
+    my $info = $context->get_info();
+    print $info->{FuzzyMD5}," $file\n";
 } else  {
     print Dumper($pdf->{trailer});
 }

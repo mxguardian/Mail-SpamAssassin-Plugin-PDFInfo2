@@ -2,6 +2,7 @@ package Mail::SpamAssassin::PDF::Context::Info;
 use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Context;
+use Digest::MD5;
 use Data::Dumper;
 
 our @ISA = qw(Mail::SpamAssassin::PDF::Context);
@@ -17,6 +18,8 @@ sub new {
         LinkCount  => 0,
         uris       => {}
     };
+    $self->{fuzzy_md5} = Digest::MD5->new();
+    $self->{fuzzy_md5_data} = '';
     $self;
 }
 
@@ -25,8 +28,21 @@ sub get_info {
     return $self->{info};
 }
 
+sub parse_begin {
+    my ($self,$parser) = @_;
+
+    my $fuzzy_data = $self->serialize_fuzzy($parser->{trailer});
+    $self->{fuzzy_md5}->add( $fuzzy_data );
+    $self->{fuzzy_md5_data} .= $fuzzy_data;
+
+}
+
 sub page_begin {
     my ($self, $page) = @_;
+
+    my $fuzzy_data = $self->serialize_fuzzy($page);
+    $self->{fuzzy_md5}->add( $fuzzy_data );
+    $self->{fuzzy_md5_data} .= $fuzzy_data;
 
     $self->{info}->{PageCount}++;
 
@@ -42,6 +58,10 @@ sub page_begin {
 
 sub draw_image {
     my ($self,$image,$page) = @_;
+
+    my $fuzzy_data = $self->serialize_fuzzy($image);
+    $self->{fuzzy_md5}->add( $fuzzy_data );
+    $self->{fuzzy_md5_data} .= $fuzzy_data;
 
     $self->{info}->{ImageCount}++;
 
@@ -63,12 +83,17 @@ sub draw_image {
 sub uri {
     my ($self,$location) = @_;
 
+    my $fuzzy_data = '/URI';
+    $self->{fuzzy_md5}->add( $fuzzy_data );
+    $self->{fuzzy_md5_data} .= $fuzzy_data;
+
+
     $self->{info}->{uris}->{$location} = 1;
     $self->{info}->{LinkCount}++;
 
 }
 
-sub parse_complete {
+sub parse_end {
     my ($self,$parser) = @_;
 
     $self->{info}->{ImageArea} = sprintf(
@@ -94,8 +119,36 @@ sub parse_complete {
 
     $self->{info}->{Encrypted} = defined($parser->{trailer}->{'/Encrypt'}) ? 1 : 0;
     $self->{info}->{Version} = $parser->{version};
+    $self->{info}->{FuzzyMD5} = uc($self->{fuzzy_md5}->hexdigest());
 
 }
 
+sub serialize_fuzzy {
+    my ($self,$obj) = @_;
+
+    if ( !defined($obj) ) {
+        return 'U';
+    } elsif ( ref($obj) eq 'ARRAY' ) {
+        my $str = '';
+        $str .= $self->serialize_fuzzy($_) for @$obj;
+        return $str;
+    } elsif ( ref($obj) eq 'HASH' ) {
+        my $str = '';
+        foreach (sort keys %$obj) {
+            next unless /^\//;
+            $str .= $_ . $self->serialize_fuzzy( $obj->{$_} );
+        }
+        return $str;
+    } elsif ( $obj =~ /^\d+ \d+ R$/ )  {
+        return 'R';
+    } elsif ( $obj =~ /^[\d.+-]+$/ ) {
+        return 'N';
+    } elsif ( $obj =~ /^D:/ ) {
+        return 'D';
+    }
+
+    return $obj;
+
+}
 
 1;

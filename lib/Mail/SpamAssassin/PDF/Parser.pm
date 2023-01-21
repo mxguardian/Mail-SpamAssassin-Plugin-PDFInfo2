@@ -21,13 +21,13 @@ sub new {
         images       => {},
         core         => Mail::SpamAssassin::PDF::Core->new(),
 
-        context      => $opts{context},
-
         object_cache => {},
         stream_cache => {},
     }, $class;
 
     $debug = $opts{debug};
+
+    $self->{context} = $opts{context} || Mail::SpamAssassin::PDF::Context::Info->new();
 
     $self;
 }
@@ -57,10 +57,12 @@ sub parse {
         $self->_parse_action($root->{'/OpenAction'});
     }
 
+    $self->{context}->parse_begin($self) if $self->{context}->can('parse_begin');
+
     # Parse page tree
     $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
 
-    $self->{context}->parse_complete($self) if $self->{context}->can('parse_complete');
+    $self->{context}->parse_end($self) if $self->{context}->can('parse_end');
 
 }
 

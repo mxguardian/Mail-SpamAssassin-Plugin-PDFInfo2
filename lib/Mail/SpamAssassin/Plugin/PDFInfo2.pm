@@ -17,7 +17,7 @@
 
 =head1 NAME
 
-Mail::SpamAssassin::Plugin::PDFInfo2 - PDFInfo2 Plugin for SpamAssassin
+Mail::SpamAssassin::Plugin::PDFInfo2 - Improved PDF Plugin for SpamAssassin
 
 =head1 SYNOPSIS
 
@@ -26,6 +26,38 @@ Mail::SpamAssassin::Plugin::PDFInfo2 - PDFInfo2 Plugin for SpamAssassin
 =head1 DESCRIPTION
 
 This plugin helps detect spam using attached PDF files
+
+=over 4
+
+=item
+
+  Usage:
+
+    body    PDF_COUNT       eval:pdf2_count(1,1)
+    score   PDF_COUNT       0.001
+
+    body    PDF_PAGE_COUNT  eval:pdf2_page_count(1,1)
+    score   PDF_PAGE_COUNT  0.001
+
+    body    PDF_IMAGE_COUNT eval:pdf2_image_count(1,1)
+    score   PDF_IMAGE_COUNT 0.001
+
+    body    PDF_LINK_COUNT  eval:pdf2_link_count(1,1)
+    score   PDF_LINK_COUNT  0.001
+
+    body    PDF_WORD_COUNT  eval:pdf2_word_count(1,10)
+    score   PDF_WORD_COUNT  0.001
+
+    body    PDF_ENCRYPTED   eval:pdf2_is_encrypted()
+    score   PDF_ENCRYPTED   0.001
+
+    body    PDF_DETAILS     eval:pdf2_match_details('Title','/paypal/')
+    score   PDF_DETAILS     0.001
+
+    body    PDF_MD5         eval:pdf2_match_md5('b3bf38c48788a8aa6e4f37190852f40e')
+    score   PDF_MD5         0.001
+
+=back
 
 =cut
 
@@ -54,22 +86,19 @@ sub new {
     my $self = $class->SUPER::new($mailsaobject);
     bless ($self, $class);
 
-    $self->register_eval_rule ("pdf_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_image_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_pixel_coverage", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_image_size_exact", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_image_size_range", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_named", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_name_regex", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_image_to_text_ratio", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_match_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_match_fuzzy_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf_is_empty_body", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_word_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_image_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_word_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    # $self->register_eval_rule ("pdf2_pixel_coverage", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    # $self->register_eval_rule ("pdf2_image_size_exact", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    # $self->register_eval_rule ("pdf2_image_size_range", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    # $self->register_eval_rule ("pdf2_image_to_text_ratio", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_match_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_match_fuzzy_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
     $self->register_method_priority ("parsed_metadata", -1);
@@ -83,72 +112,84 @@ sub parsed_metadata {
     my $pms = $opts->{permsgstatus};
 
     # initialize
-    $pms->{pdfinfo}->{totals}->{ImageCount} = 0;
-    $pms->{pdfinfo}->{files} = {};
+    $pms->{pdfinfo2}->{totals}->{ImageCount} = 0;
+    $pms->{pdfinfo2}->{files} = {};
 
     my @parts = $pms->{msg}->find_parts(qr@^(image|application)/(pdf|octet\-stream)$@, 1);
     my $part_count = scalar @parts;
 
-    dbg("pdfinfo: Identified $part_count possible mime parts that need checked for PDF content");
+    dbg("pdfinfo2: Identified $part_count possible mime parts that need checked for PDF content");
 
     foreach my $p (@parts) {
         my $type = $p->{type} || '';
         my $name = $p->{name} || '';
 
-        dbg("pdfinfo: found part, type=$type file=$name");
+        dbg("pdfinfo2: found part, type=$type file=$name");
 
         # filename must end with .pdf, or application type can be pdf
         # sometimes windows muas will wrap a pdf up inside a .dat file
         # v0.8 - Added .fdf phoney PDF detection
         next unless ($name =~ /\.[fp]df$/i || $type =~ m@/pdf$@);
 
-        _set_tag($pms, 'PDFNAME', $name);
+        _set_tag($pms, 'PDF2NAME', $name);
+        $pms->{pdfinfo2}->{totals}->{FileCount}++;
 
         # Get raw PDF data
         my $data = $p->decode();
         next unless $data;
 
-        $pms->{pdfinfo}->{md5}->{uc(md5_hex($data))} = 1;
-        $pms->{pdfinfo}->{totals}->{FileCount}++;
+        my $md5 = uc(md5_hex($data));
+        $pms->{pdfinfo2}->{md5}->{$md5} = 1;
+        _set_tag($pms, 'PDF2MD5', $md5);
 
         # Parse PDF
-        my $pdf = Mail::SpamAssassin::PDF::Parser->new(
-            context  => Mail::SpamAssassin::PDF::Context::Info->new
-        );
+        my $pdf = Mail::SpamAssassin::PDF::Parser->new();
         my $info = eval {
             $pdf->parse($data);
             $pdf->{context}->get_info();
         };
         if ( !defined($info) ) {
-            dbg("pdfinfo: Error parsing pdf: $@");
+            dbg("pdfinfo2: Error parsing pdf: $@");
             next;
+        }
+
+        # Add URI's
+        foreach my $location ( keys %{ $info->{uris} }) {
+            dbg("pdfinfo2: found URI: $location");
+            $pms->add_uri_detail_list($location,{ pdf => 1 },'PDFInfo2');
         }
 
         # Get word count (requires ExtractText to have already extracted text from the PDF)
         my $text = $p->rendered() || '';
         $info->{WordCount} = scalar(split(/\s+/, $text));
 
-        $pms->{pdfinfo}->{files}->{$name} = $info;
-        $pms->{pdfinfo}->{totals}->{ImageCount} += $info->{ImageCount};
-        $pms->{pdfinfo}->{totals}->{PageCount} += $info->{PageCount};
-        $pms->{pdfinfo}->{totals}->{WordCount} += $info->{WordCount};
-        $pms->{pdfinfo}->{totals}->{ImageArea} += $info->{ImageArea};
-        $pms->{pdfinfo}->{totals}->{PageArea} += $info->{PageArea};
-        $pms->{pdfinfo}->{totals}->{Encrypted} += $info->{Encrypted};
+        $pms->{pdfinfo2}->{files}->{$name} = $info;
+        $pms->{pdfinfo2}->{totals}->{ImageCount} += $info->{ImageCount};
+        $pms->{pdfinfo2}->{totals}->{PageCount} += $info->{PageCount};
+        $pms->{pdfinfo2}->{totals}->{LinkCount} += $info->{LinkCount};
+        $pms->{pdfinfo2}->{totals}->{WordCount} += $info->{WordCount};
+        $pms->{pdfinfo2}->{totals}->{ImageArea} += $info->{ImageArea};
+        $pms->{pdfinfo2}->{totals}->{PageArea} += $info->{PageArea};
+        $pms->{pdfinfo2}->{totals}->{Encrypted} += $info->{Encrypted};
 
-        _set_tag($pms, 'PDFVERSION', $pdf->version );
+        _set_tag($pms, 'PDF2VERSION', $pdf->version );
+        _set_tag($pms, 'PDF2FUZZYMD5', $info->{FuzzyMD5});
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{FuzzyMD5}} = 1;
 
     }
 
-    _set_tag($pms, 'PDFCOUNT', $pms->{pdfinfo}->{totals}->{FileCount} );
-    _set_tag($pms, 'PDFIMGCOUNT', $pms->{pdfinfo}->{totals}->{ImageCount});
+    _set_tag($pms, 'PDF2FILECOUNT', $pms->{pdfinfo2}->{totals}->{FileCount} );
+    _set_tag($pms, 'PDF2IMAGECOUNT', $pms->{pdfinfo2}->{totals}->{ImageCount});
+    _set_tag($pms, 'PDF2WORDCOUNT', $pms->{pdfinfo2}->{totals}->{WordCount});
+    _set_tag($pms, 'PDF2PAGECOUNT', $pms->{pdfinfo2}->{totals}->{PageCount});
+    _set_tag($pms, 'PDF2LINKCOUNT', $pms->{pdfinfo2}->{totals}->{LinkCount});
 }
 
 sub _set_tag {
     my ($pms, $tag, $value) = @_;
 
     return unless defined $value && $value ne '';
-    dbg("pdfinfo: set_tag called for $tag: $value");
+    dbg("pdfinfo2: set_tag called for $tag: $value");
 
     if (exists $pms->{tag_data}->{$tag}) {
         # Limit to some sane length
@@ -161,180 +202,78 @@ sub _set_tag {
     }
 }
 
-sub pdf_named {
-    my ($self, $pms, $body, $name) = @_;
-
-    return 0 unless defined $name;
-
-    return 1 if exists $pms->{pdfinfo}->{files}->{$name};
-    return 0;
-}
-
-sub pdf_name_regex {
-    my ($self, $pms, $body, $regex) = @_;
-
-    return 0 unless defined $regex;
-    return 0 unless exists $pms->{pdfinfo}->{files};
-
-    my ($rec, $err) = compile_regexp($regex, 2);
-    if (!$rec) {
-        my $rulename = $pms->get_current_eval_rule_name();
-        warn "pdfinfo: invalid regexp for $rulename '$regex': $err";
-        return 0;
-    }
-
-    foreach my $name (keys %{$pms->{pdfinfo}->{files}}) {
-        if ($name =~ $rec) {
-            dbg("pdfinfo: pdf_name_regex hit on $name");
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-sub pdf_is_encrypted {
+sub pdf2_is_encrypted {
     my ($self, $pms, $body) = @_;
 
-    return $pms->{pdfinfo}->{totals}->{Encrypted} ? 1 : 0;
+    return $pms->{pdfinfo2}->{totals}->{Encrypted} ? 1 : 0;
 }
 
-sub pdf_count {
+sub pdf2_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
-    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{FileCount});
+    return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{FileCount});
 }
 
-sub pdf_image_count {
+sub pdf2_image_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
-    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{ImageCount});
+    return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{ImageCount});
 }
 
-# sub pdf_pixel_coverage {
-#     my ($self,$pms,$body,$min,$max) = @_;
-#
-#     return _result_check($min, $max, $pms->{pdfinfo}->{pc_pdf});
-# }
-#
-# sub pdf_image_to_text_ratio {
-#     my ($self, $pms, $body, $min, $max) = @_;
-#
-#     return 0 unless defined $max;
-#     return 0 unless $pms->{pdfinfo}->{pc_pdf};
-#
-#     # depending on how you call this eval (body vs rawbody),
-#     # the $textlen will differ.
-#     my $textlen = length(join('', @$body));
-#     return 0 unless $textlen;
-#
-#     my $ratio = $textlen / $pms->{pdfinfo}->{pc_pdf};
-#     dbg("pdfinfo: image ratio=$ratio, min=$min max=$max");
-#
-#     return _result_check($min, $max, $ratio, 1);
-# }
-#
-# sub pdf_is_empty_body {
-#     my ($self, $pms, $body, $min) = @_;
-#
-#     return 0 unless $pms->{pdfinfo}->{count_pdf};
-#     $min ||= 0;  # default to 0 bytes
-#
-#     my $bytes = 0;
-#     my $idx = 0;
-#     foreach my $line (@$body) {
-#         next if $idx++ == 0; # skip subject line
-#         next unless $line =~ /\S/;
-#         $bytes += length($line);
-#         # no hit if minimum already exceeded
-#         return 0 if $bytes > $min;
-#     }
-#
-#     dbg("pdfinfo: pdf_is_empty_body matched ($bytes <= $min)");
-#     return 1;
-# }
-#
-# sub pdf_image_size_exact {
-#     my ($self, $pms, $body, $height, $width) = @_;
-#
-#     return 0 unless defined $width;
-#
-#     return 1 if exists $pms->{pdfinfo}->{dems_pdf}->{"${height}x${width}"};
-#     return 0;
-# }
-#
-# sub pdf_image_size_range {
-#     my ($self, $pms, $body, $minh, $minw, $maxh, $maxw) = @_;
-#
-#     return 0 unless defined $minw;
-#     return 0 unless exists $pms->{pdfinfo}->{dems_pdf};
-#
-#     foreach my $dem (keys %{$pms->{pdfinfo}->{dems_pdf}}) {
-#         my ($h, $w) = split(/x/, $dem);
-#         next if ($h < $minh);  # height less than min height
-#         next if ($w < $minw);  # width less than min width
-#         next if (defined $maxh && $h > $maxh);  # height more than max height
-#         next if (defined $maxw && $w > $maxw);  # width more than max width
-#         # if we make it here, we have a match
-#         return 1;
-#     }
-#
-#     return 0;
-# }
-
-sub pdf_match_md5 {
+sub pdf2_match_md5 {
     my ($self, $pms, $body, $md5) = @_;
 
     return 0 unless defined $md5;
 
-    return 1 if exists $pms->{pdfinfo}->{md5}->{uc $md5};
+    return 1 if exists $pms->{pdfinfo2}->{md5}->{uc $md5};
     return 0;
 }
 
-# sub pdf_match_fuzzy_md5 {
-#     my ($self, $pms, $body, $md5) = @_;
-#
-#     return 0 unless defined $md5;
-#
-#     return 1 if exists $pms->{pdfinfo}->{fuzzy_md5}->{uc $md5};
-#     return 0;
-# }
+sub pdf2_match_fuzzy_md5 {
+    my ($self, $pms, $body, $md5) = @_;
 
-sub pdf_link_count {
-    my ($self, $pms, $body, $min, $max) = @_;
-
-    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{LinkCount});
+    return 0 unless defined $md5;
+    dbg("pdfinfo2: Looking up $md5");
+    dbg("pdfinfo2: ".Dumper($pms->{pdfinfo2}->{fuzzy_md5}));
+    return 1 if exists $pms->{pdfinfo2}->{fuzzy_md5}->{uc $md5};
+    return 0;
 }
 
-sub pdf_word_count {
+sub pdf2_link_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
-    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{WordCount});
+    return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{LinkCount});
 }
 
-sub pdf_page_count {
+sub pdf2_word_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
-    return _result_check($min, $max, $pms->{pdfinfo}->{totals}->{PageCount});
+    return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{WordCount});
 }
 
-sub pdf_match_details {
+sub pdf2_page_count {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{PageCount});
+}
+
+sub pdf2_match_details {
     my ($self, $pms, $body, $detail, $regex) = @_;
 
     return 0 unless defined $regex;
-    return 0 unless exists $pms->{pdfinfo}->{files};
+    return 0 unless exists $pms->{pdfinfo2}->{files};
 
     my ($re, $err) = compile_regexp($regex, 2);
     if (!$re) {
         my $rulename = $pms->get_current_eval_rule_name();
-        warn "pdfinfo: invalid regexp for $rulename '$regex': $err";
+        warn "pdfinfo2: invalid regexp for $rulename '$regex': $err";
         return 0;
     }
 
-    foreach (keys %{$pms->{pdfinfo}->{files}}) {
-        my $value = $pms->{pdfinfo}->{files}->{$_}->{$detail};
+    foreach (keys %{$pms->{pdfinfo2}->{files}}) {
+        my $value = $pms->{pdfinfo2}->{files}->{$_}->{$detail};
         if ( defined($value) && $value =~ $re ) {
-            dbg("pdfinfo: pdf_match_details $detail ($regex) match: $_");
+            dbg("pdfinfo2: pdf2_match_details $detail ($regex) match: $_");
             return 1;
         }
     }
