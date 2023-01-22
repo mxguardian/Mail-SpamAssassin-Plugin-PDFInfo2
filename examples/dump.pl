@@ -23,7 +23,7 @@ use Pod::Usage;
 =cut
 
 my %opts;
-getopts('fg:o:s:',\%opts);
+getopts('Ffg:o:s:',\%opts);
 
 my ($file) = @ARGV;
 pod2usage() unless defined $file;
@@ -58,6 +58,9 @@ if ( defined $opts{o} ) {
 } elsif ( defined($opts{f}) ) {
     my $info = $context->get_info();
     print $info->{FuzzyMD5}," $file\n";
+} elsif ( defined($opts{F}) ) {
+    my $info = $context->get_info();
+    print $info->{FuzzyMD5Data},"\n";
 } else  {
     print Dumper($pdf->{trailer});
 }

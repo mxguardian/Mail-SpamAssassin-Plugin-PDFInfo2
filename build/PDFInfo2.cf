@@ -1,4 +1,4 @@
 loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2     PDFInfo2.pm
 
-body  PDF_FUZZY_MD5  eval:pdf2_match_fuzzy_md5('39992a88a8ecc4cf9d9ae7025859bfc8')
-score PDF_FUZZY_MD5  0.001
+add_header all PDF2-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
+add_header all PDF2-Details producer=_PDF2PRODUCER_, author=_PDF2AUTHOR_, creator=_PDF2CREATOR_, title=_PDF2TITLE_, image_density=_PDF2IMAGEDENSITY_

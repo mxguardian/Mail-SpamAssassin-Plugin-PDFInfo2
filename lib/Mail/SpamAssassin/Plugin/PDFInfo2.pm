@@ -33,29 +33,29 @@ This plugin helps detect spam using attached PDF files
 
   Usage:
 
-    body    PDF_COUNT       eval:pdf2_count(1,1)
-    score   PDF_COUNT       0.001
+    body    RULENAME    eval:pdf2_count(1,1)
+    score   RULENAME    0.001
 
-    body    PDF_PAGE_COUNT  eval:pdf2_page_count(1,1)
-    score   PDF_PAGE_COUNT  0.001
+    body    RULENAME    eval:pdf2_page_count(1,1)
+    score   RULENAME    0.001
 
-    body    PDF_IMAGE_COUNT eval:pdf2_image_count(1,1)
-    score   PDF_IMAGE_COUNT 0.001
+    body    RULENAME    eval:pdf2_image_count(1,1)
+    score   RULENAME    0.001
 
-    body    PDF_LINK_COUNT  eval:pdf2_link_count(1,1)
-    score   PDF_LINK_COUNT  0.001
+    body    RULENAME    eval:pdf2_link_count(1,1)
+    score   RULENAME    0.001
 
-    body    PDF_WORD_COUNT  eval:pdf2_word_count(1,10)
-    score   PDF_WORD_COUNT  0.001
+    body    RULENAME    eval:pdf2_word_count(1,10)
+    score   RULENAME    0.001
 
-    body    PDF_ENCRYPTED   eval:pdf2_is_encrypted()
-    score   PDF_ENCRYPTED   0.001
+    body    RULENAME    eval:pdf2_is_encrypted()
+    score   RULENAME    0.001
 
-    body    PDF_DETAILS     eval:pdf2_match_details('Title','/paypal/')
-    score   PDF_DETAILS     0.001
+    body    RULENAME    eval:pdf2_match_details('Title','/paypal/')
+    score   RULENAME    0.001
 
-    body    PDF_MD5         eval:pdf2_match_md5('b3bf38c48788a8aa6e4f37190852f40e')
-    score   PDF_MD5         0.001
+    body    RULENAME    eval:pdf2_match_md5('b3bf38c48788a8aa6e4f37190852f40e')
+    score   RULENAME    0.001
 
 =back
 
@@ -91,6 +91,7 @@ sub new {
     $self->register_eval_rule ("pdf2_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_word_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_image_density", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     # $self->register_eval_rule ("pdf2_pixel_coverage", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     # $self->register_eval_rule ("pdf2_image_size_exact", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     # $self->register_eval_rule ("pdf2_image_size_range", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
@@ -139,8 +140,6 @@ sub parsed_metadata {
         next unless $data;
 
         my $md5 = uc(md5_hex($data));
-        $pms->{pdfinfo2}->{md5}->{$md5} = 1;
-        _set_tag($pms, 'PDF2MD5', $md5);
 
         # Parse PDF
         my $pdf = Mail::SpamAssassin::PDF::Parser->new();
@@ -163,6 +162,7 @@ sub parsed_metadata {
         my $text = $p->rendered() || '';
         $info->{WordCount} = scalar(split(/\s+/, $text));
 
+
         $pms->{pdfinfo2}->{files}->{$name} = $info;
         $pms->{pdfinfo2}->{totals}->{ImageCount} += $info->{ImageCount};
         $pms->{pdfinfo2}->{totals}->{PageCount} += $info->{PageCount};
@@ -171,14 +171,23 @@ sub parsed_metadata {
         $pms->{pdfinfo2}->{totals}->{ImageArea} += $info->{ImageArea};
         $pms->{pdfinfo2}->{totals}->{PageArea} += $info->{PageArea};
         $pms->{pdfinfo2}->{totals}->{Encrypted} += $info->{Encrypted};
+        $pms->{pdfinfo2}->{md5}->{$md5} = 1;
 
+        _set_tag($pms, 'PDF2PRODUCER', $info->{Producer});
+        _set_tag($pms, 'PDF2AUTHOR', $info->{Author});
+        _set_tag($pms, 'PDF2CREATOR', $info->{Creator});
+        _set_tag($pms, 'PDF2TITLE', $info->{Title});
+        _set_tag($pms, 'PDF2IMAGEDENSITY', $info->{ImageDensity});
         _set_tag($pms, 'PDF2VERSION', $pdf->version );
-        _set_tag($pms, 'PDF2FUZZYMD5', $info->{FuzzyMD5});
+
+        $pms->{pdfinfo2}->{md5}->{$md5} = 1;
         $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{FuzzyMD5}} = 1;
+        _set_tag($pms, 'PDF2MD5', $md5);
+        _set_tag($pms, 'PDF2MD5FUZZY1', $info->{FuzzyMD5});
 
     }
 
-    _set_tag($pms, 'PDF2FILECOUNT', $pms->{pdfinfo2}->{totals}->{FileCount} );
+    _set_tag($pms, 'PDF2COUNT', $pms->{pdfinfo2}->{totals}->{FileCount} );
     _set_tag($pms, 'PDF2IMAGECOUNT', $pms->{pdfinfo2}->{totals}->{ImageCount});
     _set_tag($pms, 'PDF2WORDCOUNT', $pms->{pdfinfo2}->{totals}->{WordCount});
     _set_tag($pms, 'PDF2PAGECOUNT', $pms->{pdfinfo2}->{totals}->{PageCount});
@@ -218,6 +227,15 @@ sub pdf2_image_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
     return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{ImageCount});
+}
+
+sub pdf2_image_density {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    foreach (keys %{$pms->{pdfinfo2}->{files}}) {
+        return 1 if _result_check($min, $max, $pms->{pdfinfo2}->{files}->{$_}->{ImageDensity});
+    }
+    return 0;
 }
 
 sub pdf2_match_md5 {

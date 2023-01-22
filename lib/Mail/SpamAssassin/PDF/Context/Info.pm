@@ -3,6 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Context;
 use Digest::MD5;
+use Encode qw(decode);
 use Data::Dumper;
 
 our @ISA = qw(Mail::SpamAssassin::PDF::Context);
@@ -106,10 +107,15 @@ sub parse_end {
         $self->{info}->{PageArea}
     );
 
-    $self->{info}->{ImageDensity} = sprintf(
-        "%.2f",
-        $self->{info}->{ImageArea} / $self->{info}->{PageArea} * 100
-    );
+    if ( $self->{info}->{PageArea} > 0 ) {
+        $self->{info}->{ImageDensity} = sprintf(
+            "%.2f",
+            $self->{info}->{ImageArea} / $self->{info}->{PageArea} * 100
+        );
+        $self->{info}->{ImageDensity} = 100 if $self->{info}->{ImageDensity} > 100;
+    } else {
+        $self->{info}->{ImageDensity} = 0;
+    }
 
     for (keys %{$parser->{trailer}->{'/Info'}}) {
         my $key = $_;
@@ -120,6 +126,7 @@ sub parse_end {
     $self->{info}->{Encrypted} = defined($parser->{trailer}->{'/Encrypt'}) ? 1 : 0;
     $self->{info}->{Version} = $parser->{version};
     $self->{info}->{FuzzyMD5} = uc($self->{fuzzy_md5}->hexdigest());
+    # $self->{info}->{FuzzyMD5Data} = $self->{fuzzy_md5_data};
 
 }
 
@@ -146,6 +153,11 @@ sub serialize_fuzzy {
     } elsif ( $obj =~ /^D:/ ) {
         return 'D';
     }
+
+    eval {
+        my $tmp = $obj;
+        decode('utf-8-strict',$tmp,Encode::FB_CROAK);
+    } or return 'B';
 
     return $obj;
 

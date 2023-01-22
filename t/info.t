@@ -24,6 +24,7 @@ my @tests = (
             'ImageDensity' => '2.95',
             'LinkCount'    => 0,
             'uris'         => {},
+            'FuzzyMD5'     => '715E8FD2D08512EA74B7CCB18DE49F88',
         }
     },
     {
@@ -46,6 +47,7 @@ my @tests = (
             'CreationDate' => 'D:20200724162630-05\'00\'',
             'LinkCount'    => 0,
             'uris'         => {},
+            'FuzzyMD5'     => '332ED68EE285723FCE457839231B2FEF',
         }
     },
     {
@@ -66,6 +68,28 @@ my @tests = (
             'uris' => {
                 'https://bit.ly/3PVE5IZ' => 1
             },
+            'FuzzyMD5'     => 'B6E6F110F2EE80CDC083FDC496860210',
+        }
+    },
+    {
+        filename => 't/data/Encrypted2.pdf',
+        expected => {
+            'Encrypted' => 1,
+            'Version' => '1.4',
+            'CreationDate' => 'D:20230106154216+03\'00\'',
+            'Creator' => 'wkhtmltopdf 0.12.5',
+            'PageCount' => 2,
+            'PageArea' => 500990,
+            'ImageCount' => 1,
+            'ImageArea' => 337055,
+            'Title' => '',
+            'Producer' => 'Qt 4.8.7',
+            'ImageDensity' => '67.28',
+            'LinkCount'    => 1,
+            'uris' => {
+                'https://bit.ly/3PVE5IZ' => 1
+            },
+            'FuzzyMD5'     => 'DUMMY',
         }
     },
     {
@@ -85,6 +109,7 @@ my @tests = (
             'uris' => {
                 'https://s.id/1tzdg' => 1
             },
+            'FuzzyMD5'     => '481E37EC16FF667D3512C20E7184DC0A',
         }
     },
     {
@@ -104,6 +129,7 @@ my @tests = (
             'uris' => {
                 'http://gkjdepok.org/docdir/SCANS_PP2849.zip' => 1
             },
+            'FuzzyMD5'     => 'F6483B538F996BF452681FBB5B153691',
         }
     },
     {
@@ -126,6 +152,7 @@ my @tests = (
                 'https://sgef.collstreampay.co.uk/sgef/' => 1,
                 'http://www.equipmentfinance.societegenerale.co.uk/' => 1
             },
+            'FuzzyMD5'     => '0FA066F1E2F858C314E2CCD6F7FE1CC9',
         }
     },
     {
@@ -148,6 +175,7 @@ my @tests = (
             'uris' => {
                 'https://digital-camscanner.onelink.me/P3GL/w1r4frhy' => 1
             },
+            'FuzzyMD5'     => '13CF979A8E09F71E6DBD53931A58B444',
         }
     },
 );
