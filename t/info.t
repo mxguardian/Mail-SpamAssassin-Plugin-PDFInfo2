@@ -93,6 +93,26 @@ my @tests = (
         }
     },
     {
+        filename => 't/data/Encrypted3.pdf',
+        expected => {
+            'Producer' => "iText\xAE 5.5.13.3 \xA92000-2022 iText Group NV (AGPL-version)",
+            'ImageArea' => 175000,
+            'ImageDensity' => '34.93',
+            'Encrypted' => 1,
+            'LinkCount' => 1,
+            'uris' => {
+                'http://rot.come-over-here.site/?s1=ptt1' => 1
+            },
+            'CreationDate' => 'D:20230102151215+01\'00\'',
+            'PageCount' => 1,
+            'PageArea' => 500990,
+            'Version' => '1.4',
+            'ImageCount' => 1,
+            'FuzzyMD5' => 'AC884B5E28A1E6CF784820C4BBF561F2',
+            'ModDate' => 'D:20230102151215+01\'00\''
+        }
+    },
+    {
         filename => 't/data/VectorText.pdf',
         expected => {
             'LinkCount' => 2,

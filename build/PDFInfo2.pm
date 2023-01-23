@@ -517,6 +517,7 @@ use strict;
 use warnings FATAL => 'all';
 use Digest::MD5;
 use Crypt::RC4;
+use Crypt::Mode::CBC;
 use Carp;
 use Data::Dumper;
 
@@ -542,7 +543,7 @@ sub new {
     my $v = $encrypt->{'/V'} || 0;
     my $length = $encrypt->{'/Length'} || 40;
 
-    unless ( $v == 1 || $v == 2 ) {
+    unless ( $v == 1 || $v == 2 || $v == 4 ) {
         die "Encryption algorithm $v not implemented";
     }
 
@@ -551,6 +552,8 @@ sub new {
         O         => $encrypt->{'/O'},
         U         => $encrypt->{'/U'},
         P         => $encrypt->{'/P'},
+        CF        => $encrypt->{'/CF'},
+        V         => $v,
         ID        => $doc_id,
         keylength => ($v == 1 ? 40 : $length),
     }, $class;
@@ -573,6 +576,12 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
+    if ( $self->{V} == 4 ) {
+        # todo: Implement Crypt Filters
+        my $iv = substr($content,0,16);
+        my $m = Crypt::Mode::CBC->new('AES');
+        return $m->decrypt(substr($content,16),$self->_compute_key(),$iv);
+    }
     return Crypt::RC4::RC4($self->_compute_key(), $content);
 
 }
@@ -584,14 +593,14 @@ sub check_user_password {
     my ($self,$pass) = @_;
 
     # step 1  Perform all but the last step of Algorithm 3.4 (Revision 2) or Algorithm 3.5 (Revision 3) using the supplied password string.
-    if ( $self->{R} == 3 ) {
+    if ( $self->{R} >= 3 ) {
 
         #
         # Algorithm 3.5 Computing the encryption dictionary’s U (user password) value (Revision 3)
         #
 
         # step 1 Create an encryption key based on the user password string, as described in Algorithm 3.2
-        my $key = $self->generate_key('');
+        my $key = $self->generate_key($pass);
 
         # step 2 Initialize the MD5 hash function and pass the 32-byte padding string as input to this function
         my $md5 = Digest::MD5->new();
@@ -658,13 +667,14 @@ sub generate_key {
 
     # step 6 (Revision 3 only) If document metadata is not being encrypted, pass 4 bytes with
     # the value 0xFFFFFFFF to the MD5 hash function
+    # $md5->add(pack('V',0xFFFFFFFF));
 
     # step 7 Finish the hash
     my $hash = $md5->digest();
 
     # step 8 (Revision 3 only) Do the following 50 times: Take the output from the previous
     # MD5 hash and pass it as input into a new MD5 hash.
-    if ( $self->{R} == 3 ) {
+    if ( $self->{R} >= 3 ) {
         $hash = Digest::MD5::md5($hash) for (1..50);
     }
 
@@ -681,13 +691,24 @@ sub _compute_key {
         my $objstr = pack('V', $self->{objnum});
         my $genstr = pack('V', $self->{gennum});
 
-        my $hash = Digest::MD5::md5($self->{code} . substr($objstr, 0, 3) . substr($genstr, 0, 2));
+        my $md5 = Digest::MD5->new();
+        $md5->add($self->{code});
+        $md5->add(substr($objstr, 0, 3).substr($genstr, 0, 2));
+        if ( $self->{V} == 4 ) {
+            $md5->add('sAlT');
+        }
+        my $hash = $md5->digest();
 
         my $size = ($self->{keylength} >> 3) + 5;
         $size = 16 if ($size > 16);
         $self->{keycache}->{$id} = substr($hash, 0, $size);
     }
     return $self->{keycache}->{$id};
+}
+
+sub _hex {
+    my $val = shift;
+    return join q{}, map {sprintf '%08x', $_} unpack 'N*', $val;
 }
 
 1;
