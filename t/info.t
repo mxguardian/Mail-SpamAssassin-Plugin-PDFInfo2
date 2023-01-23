@@ -93,6 +93,28 @@ my @tests = (
         }
     },
     {
+        filename => 't/data/VectorText.pdf',
+        expected => {
+            'LinkCount' => 2,
+            'Title' => '',
+            'Encrypted' => 0,
+            'PageArea' => 500990,
+            'Version' => '1.4',
+            'PageCount' => 1,
+            'CreationDate' => 'D:20230121040738',
+            'ImageCount' => 2,
+            'ImageDensity' => '2.34',
+            'uris' => {
+                'mailto:support@itarian.com' => 1,
+                'https://forum.itarian.com/' => 1
+            },
+            'FuzzyMD5' => '0BDF548E3805B31A05E85B3B71E0B017',
+            'ImageArea' => 11700,
+            'Creator' => '',
+            'Producer' => 'Qt 5.5.1',
+        }
+    },
+    {
         filename => 't/data/Phishing.pdf',
         expected => {
             'Encrypted' => 0,
@@ -147,12 +169,13 @@ my @tests = (
             'PageArea' => 501212,
             'ImageArea' => 92587,
             'ModDate' => 'D:20221221152022+00\'00\'',
-            'LinkCount'    => 2,
+            'LinkCount'    => 3,
             'uris' => {
-                'https://sgef.collstreampay.co.uk/sgef/' => 1,
-                'http://www.equipmentfinance.societegenerale.co.uk/' => 1
+                'https://sgef.collstreampay.co.uk/sgef/'             => 1,
+                'http://www.equipmentfinance.societegenerale.co.uk/' => 1,
+                'mailto:settlements@sgef.co.uk'                      => 1
             },
-            'FuzzyMD5'     => '0FA066F1E2F858C314E2CCD6F7FE1CC9',
+            'FuzzyMD5'     => '506CC279ED3A27A3F84992DD9CDF7DD0',
         }
     },
     {

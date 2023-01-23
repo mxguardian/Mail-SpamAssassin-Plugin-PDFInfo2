@@ -934,7 +934,7 @@ sub _parse_action {
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
-        if ( $location =~ /^\w+:\/\// ) {
+        if ( $location =~ /^\w+:/ ) {
             $self->{context}->uri($location) if $self->{context}->can('uri');
         }
     }
