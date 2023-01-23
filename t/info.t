@@ -74,22 +74,22 @@ my @tests = (
     {
         filename => 't/data/Encrypted2.pdf',
         expected => {
-            'Encrypted' => 1,
+            'CreationDate' => 'D:20230102234612+00\'00\'',
+            'PageCount' => 1,
             'Version' => '1.4',
-            'CreationDate' => 'D:20230106154216+03\'00\'',
-            'Creator' => 'wkhtmltopdf 0.12.5',
-            'PageCount' => 2,
-            'PageArea' => 500990,
             'ImageCount' => 1,
-            'ImageArea' => 337055,
-            'Title' => '',
-            'Producer' => 'Qt 4.8.7',
-            'ImageDensity' => '67.28',
-            'LinkCount'    => 1,
+            'ImageDensity' => '61.43',
+            'PageArea' => 143385,
+            'Encrypted' => 1,
+            'ImageArea' => 88077,
+            'LinkCount' => 1,
+            'Creator' => 'Pdfcrowd.com v20200619.084',
+            'ModDate' => 'D:20230102234612+00\'00\'',
+            'Producer' => 'Skia/PDF',
             'uris' => {
-                'https://bit.ly/3PVE5IZ' => 1
+                'https://l.ead.me/bdbWna' => 1
             },
-            'FuzzyMD5'     => 'DUMMY',
+            'FuzzyMD5' => 'F5EBE02D8AD86A1C55C228ADB17D1787',
         }
     },
     {

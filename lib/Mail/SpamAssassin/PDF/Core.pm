@@ -73,6 +73,12 @@ sub get_hex_string {
     $hex =~ s/\s+//gxms;
     $hex .= '0' if (length($hex) % 2 == 1);
     my $str = pack("H*",$hex);
+
+    # decrypt
+    if ( defined($self->{crypt}) ) {
+        $str = $self->{crypt}->decrypt($str);
+    }
+
     if ( $str =~ s/^\xfe\xff// ) {
         from_to($str,'UTF-16be', 'UTF-8');
     } elsif ( $str =~ s/^\xff\xfe// ) {
