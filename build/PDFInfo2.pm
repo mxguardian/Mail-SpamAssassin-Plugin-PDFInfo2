@@ -1,3 +1,66 @@
+# <@LICENSE>
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# </@LICENSE>
+
+=head1 NAME
+
+Mail::SpamAssassin::Plugin::PDFInfo2 - Improved PDF Plugin for SpamAssassin
+
+=head1 SYNOPSIS
+
+  loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2
+
+=head1 DESCRIPTION
+
+This plugin helps detect spam using attached PDF files
+
+=over 4
+
+=item
+
+  Usage:
+
+    body    RULENAME    eval:pdf2_count(1,1)
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_page_count(1,1)
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_image_count(1,1)
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_link_count(1,1)
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_word_count(1,10)
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_is_encrypted()
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_match_details('Title','/paypal/')
+    score   RULENAME    0.001
+
+    body    RULENAME    eval:pdf2_match_md5('b3bf38c48788a8aa6e4f37190852f40e')
+    score   RULENAME    0.001
+
+=back
+
+=cut
+
 package Mail::SpamAssassin::PDF::Core;
 use strict;
 use warnings FATAL => 'all';
@@ -1176,71 +1239,6 @@ sub debug {
 
 
 1;
-
-# <@LICENSE>
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to you under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at:
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# </@LICENSE>
-
-=head1 NAME
-
-Mail::SpamAssassin::Plugin::PDFInfo2 - Improved PDF Plugin for SpamAssassin
-
-=head1 SYNOPSIS
-
-  loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2
-
-=head1 DESCRIPTION
-
-This plugin helps detect spam using attached PDF files
-
-=over 4
-
-=item
-
-  Usage:
-
-    body    RULENAME    eval:pdf2_count(1,1)
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_page_count(1,1)
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_image_count(1,1)
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_link_count(1,1)
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_word_count(1,10)
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_is_encrypted()
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_match_details('Title','/paypal/')
-    score   RULENAME    0.001
-
-    body    RULENAME    eval:pdf2_match_md5('b3bf38c48788a8aa6e4f37190852f40e')
-    score   RULENAME    0.001
-
-=back
-
-=cut
-
-# -------------------------------------------------------
 
 package Mail::SpamAssassin::Plugin::PDFInfo2;
 

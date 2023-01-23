@@ -7,6 +7,8 @@ OUTFILE=build/PDFInfo2.pm
 
 cp /dev/null $OUTFILE
 
+sed -e '/^=cut/q' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
+echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Core.pm >>$OUTFILE
 echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Context.pm >>$OUTFILE
@@ -19,6 +21,6 @@ sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/FlateDe
 echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Parser.pm >>$OUTFILE
 echo >>$OUTFILE
-sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
+sed -e '1,/^=cut/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
 
 

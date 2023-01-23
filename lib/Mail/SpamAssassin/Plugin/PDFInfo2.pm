@@ -60,9 +60,6 @@ This plugin helps detect spam using attached PDF files
 =back
 
 =cut
-
-# -------------------------------------------------------
-
 package Mail::SpamAssassin::Plugin::PDFInfo2;
 
 use Mail::SpamAssassin::Plugin;
