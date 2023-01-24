@@ -16,6 +16,7 @@ sub new {
         PageCount  => 0,
         PageArea   => 0,
         ImageArea  => 0,
+        ClickArea  => 0,
         LinkCount  => 0,
         uris       => {}
     };
@@ -82,39 +83,33 @@ sub draw_image {
 }
 
 sub uri {
-    my ($self,$location) = @_;
+    my ($self,$location,$rect) = @_;
 
     my $fuzzy_data = '/URI';
     $self->{fuzzy_md5}->add( $fuzzy_data );
     $self->{fuzzy_md5_data} .= $fuzzy_data;
 
-
     $self->{info}->{uris}->{$location} = 1;
     $self->{info}->{LinkCount}++;
 
+    if ( defined($rect) ) {
+        $self->{info}->{ClickArea} += abs(($rect->[2]-$rect->[0]) * ($rect->[3]-$rect->[1]));
+    }
 }
 
 sub parse_end {
     my ($self,$parser) = @_;
 
-    $self->{info}->{ImageArea} = sprintf(
-        "%.0f",
-        $self->{info}->{ImageArea}
-    );
-
-    $self->{info}->{PageArea} = sprintf(
-        "%.0f",
-        $self->{info}->{PageArea}
-    );
+    $self->{info}->{ImageArea} = _round($self->{info}->{ImageArea},0);
+    $self->{info}->{PageArea} = _round($self->{info}->{PageArea},0);
+    $self->{info}->{ClickArea} = _round($self->{info}->{ClickArea},0);
 
     if ( $self->{info}->{PageArea} > 0 ) {
-        $self->{info}->{ImageDensity} = sprintf(
-            "%.2f",
-            $self->{info}->{ImageArea} / $self->{info}->{PageArea} * 100
-        );
-        $self->{info}->{ImageDensity} = 100 if $self->{info}->{ImageDensity} > 100;
+        $self->{info}->{ImageRatio} = _min(100,_round($self->{info}->{ImageArea} / $self->{info}->{PageArea} * 100,2));
+        $self->{info}->{ClickRatio} = _min(100,_round($self->{info}->{ClickArea} / $self->{info}->{PageArea} * 100,2));
     } else {
-        $self->{info}->{ImageDensity} = 0;
+        $self->{info}->{ImageRatio} = 0;
+        $self->{info}->{ClickRatio} = 0;
     }
 
     for (keys %{$parser->{trailer}->{'/Info'}}) {
@@ -161,6 +156,16 @@ sub serialize_fuzzy {
 
     return $obj;
 
+}
+
+sub _round {
+    my ($num,$prec) = @_;
+    sprintf("%.${prec}f",$num);
+}
+
+sub _min {
+    my ($x,$y) = @_;
+    $x < $y ? $x : $y;
 }
 
 1;

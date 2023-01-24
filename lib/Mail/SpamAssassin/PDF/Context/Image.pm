@@ -26,6 +26,7 @@ sub page_begin {
 
     $self->{canvas} = Image::Magick->new(size=>$size);
     $self->{canvas}->ReadImage('canvas:white');
+    $self->{uris} = [];
     return 1;
 }
 
@@ -37,9 +38,21 @@ sub draw_image {
     $self->{canvas}->Draw(primitive=>'rectangle', stroke=>'red',fill=>'gray', points=>$points);
 }
 
+sub uri {
+    my ($self,$location,$rect) = @_;
+    return unless defined($rect);
+    push(@{$self->{uris}},$rect);
+}
+
 sub page_end {
     my ($self,$page) = @_;
     my $page_number = $page->{page_number};
+
+    foreach (@{$self->{uris}}) {
+        my ($x,$y,$w,$h) = @$_;
+        my $points = sprintf("%d,%d %d,%d",$self->transform(@$_));
+        $self->{canvas}->Draw(primitive=>'rectangle', stroke=>'none', fill => 'rgba( 0, 0, 255 , 0.5 )', points=>$points);
+    }
 
     my $filename = sprintf("page-%03d.png",$page_number);
     print "Writing file $filename\n";

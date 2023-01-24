@@ -234,21 +234,21 @@ sub _parse_annotations {
     for my $ref (@$annots) {
         my $annot = $self->_get_obj($ref);
         if ( defined($annot->{'/Subtype'}) && $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'}) ) {
-            $self->_parse_action($annot->{'/A'});
+            $self->_parse_action($annot->{'/A'},$annot->{'/Rect'});
         }
     }
 
 }
 
 sub _parse_action {
-    my ($self,$action) = @_;
+    my ($self,$action,$rect) = @_;
     $action = $self->_dereference($action);
     return unless defined($action);
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
         if ( $location =~ /^\w+:/ ) {
-            $self->{context}->uri($location) if $self->{context}->can('uri');
+            $self->{context}->uri($location,$rect) if $self->{context}->can('uri');
         }
     }
 

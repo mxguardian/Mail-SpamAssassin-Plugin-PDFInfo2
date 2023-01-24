@@ -88,11 +88,8 @@ sub new {
     $self->register_eval_rule ("pdf2_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_word_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    $self->register_eval_rule ("pdf2_image_density", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf2_pixel_coverage", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf2_image_size_exact", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf2_image_size_range", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
-    # $self->register_eval_rule ("pdf2_image_to_text_ratio", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_image_ratio", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_click_ratio", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_match_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_match_fuzzy_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
@@ -174,7 +171,8 @@ sub parsed_metadata {
         _set_tag($pms, 'PDF2AUTHOR', $info->{Author});
         _set_tag($pms, 'PDF2CREATOR', $info->{Creator});
         _set_tag($pms, 'PDF2TITLE', $info->{Title});
-        _set_tag($pms, 'PDF2IMAGEDENSITY', $info->{ImageDensity});
+        _set_tag($pms, 'PDF2IMAGERATIO', $info->{ImageRatio});
+        _set_tag($pms, 'PDF2CLICKRATIO', $info->{ImageRatio});
         _set_tag($pms, 'PDF2VERSION', $pdf->version );
 
         $pms->{pdfinfo2}->{md5}->{$md5} = 1;
@@ -226,11 +224,20 @@ sub pdf2_image_count {
     return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{ImageCount});
 }
 
-sub pdf2_image_density {
+sub pdf2_image_ratio {
     my ($self, $pms, $body, $min, $max) = @_;
 
     foreach (keys %{$pms->{pdfinfo2}->{files}}) {
-        return 1 if _result_check($min, $max, $pms->{pdfinfo2}->{files}->{$_}->{ImageDensity});
+        return 1 if _result_check($min, $max, $pms->{pdfinfo2}->{files}->{$_}->{ImageRatio});
+    }
+    return 0;
+}
+
+sub pdf2_click_ratio {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    foreach (keys %{$pms->{pdfinfo2}->{files}}) {
+        return 1 if _result_check($min, $max, $pms->{pdfinfo2}->{files}->{$_}->{ClickRatio});
     }
     return 0;
 }
