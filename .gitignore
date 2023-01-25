@@ -1,4 +1,4 @@
 .idea/
-dist/PDFInfo2.pm
 test.*
 *.png
+t/ham/*

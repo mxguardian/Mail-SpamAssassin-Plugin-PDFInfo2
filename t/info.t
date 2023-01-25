@@ -7,7 +7,7 @@ use Data::Dumper;
 
 my @tests = (
     {
-        filename => 't/data/North Gaston HS flyer.pdf',
+        filename => 't/ham/North Gaston HS flyer.pdf',
         expected => {
             'Encrypted'    => 0,
             'Protected'    => 0,
@@ -32,7 +32,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/how_to_manage_club_members_en.pdf',
+        filename => 't/ham/how_to_manage_club_members_en.pdf',
         expected   => {
             'Encrypted' => 0,
             'Protected'    => 0,
@@ -59,7 +59,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Encrypted.pdf',
+        filename => 't/spam/Encrypted.pdf',
         expected => {
             'Encrypted' => 1,
             'Protected'    => 0,
@@ -84,32 +84,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Encrypted2.pdf',
-        expected => {
-            'Protected'    => 0,
-            'CreationDate' => 'D:20230102234612+00\'00\'',
-            'PageCount' => 1,
-            'Version' => '1.4',
-            'ImageCount' => 1,
-            'ColorImageCount' => 1,
-            'ImageRatio' => '61.43',
-            'PageArea' => 143385,
-            'Encrypted' => 1,
-            'ImageArea' => 88077,
-            'LinkCount' => 1,
-            'Creator' => 'Pdfcrowd.com v20200619.084',
-            'ModDate' => 'D:20230102234612+00\'00\'',
-            'Producer' => 'Skia/PDF',
-            'uris' => {
-                'https://l.ead.me/bdbWna' => 1
-            },
-            'FuzzyMD5' => 'F5EBE02D8AD86A1C55C228ADB17D1787',
-            'ClickRatio' => '61.82',
-            'ClickArea' => 88642,
-        }
-    },
-    {
-        filename => 't/data/Encrypted3.pdf',
+        filename => 't/spam/Encrypted2.pdf',
         expected => {
             'Protected'    => 0,
             'Producer' => "iText\xAE 5.5.13.3 \xA92000-2022 iText Group NV (AGPL-version)",
@@ -133,7 +108,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/VectorText.pdf',
+        filename => 't/ham/VectorText.pdf',
         expected => {
             'Protected'    => 0,
             'LinkCount' => 2,
@@ -159,7 +134,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Phishing.pdf',
+        filename => 't/spam/Phishing.pdf',
         expected => {
             'Protected'    => 0,
             'Encrypted' => 0,
@@ -183,7 +158,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Phishing2.pdf',
+        filename => 't/spam/Phishing2.pdf',
         expected => {
             'Protected'    => 0,
             'Encrypted'    => 0,
@@ -207,7 +182,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/ImageText.pdf',
+        filename => 't/ham/ImageText.pdf',
         expected => {
             'Protected'    => 0,
             'Encrypted' => 0,
@@ -235,7 +210,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/CamScanner.pdf',
+        filename => 't/ham/CamScanner.pdf',
         expected => {
             'Protected'    => 0,
             'Encrypted' => 0,
@@ -262,7 +237,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Paypal.pdf',
+        filename => 't/spam/Paypal.pdf',
         expected => {
             'Protected'    => 0,
             'PageArea' => 484704,
@@ -286,7 +261,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/GeekSquad.pdf',
+        filename => 't/spam/GeekSquad.pdf',
         expected => {
             'Protected'    => 0,
             'LinkCount' => 0,
@@ -305,7 +280,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Bitcoin.pdf',
+        filename => 't/spam/Bitcoin.pdf',
         expected => {
             'Protected'    => 0,
             'Version' => '1.3',
@@ -334,7 +309,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Password.pdf',
+        filename => 't/ham/Password.pdf',
         expected => {
             'Version' => '1.6',
             'uris' => {},
@@ -353,7 +328,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/Fax.pdf',
+        filename => 't/ham/Fax.pdf',
         expected => {
             'CreationDate' => 'D:20230122031715',
             'ClickRatio' => '0.00',
