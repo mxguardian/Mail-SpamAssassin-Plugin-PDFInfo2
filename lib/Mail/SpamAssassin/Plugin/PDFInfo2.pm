@@ -47,6 +47,16 @@ This plugin requires the following non-core perl modules:
 
 =back
 
+=head1 INSTALLATION
+
+=head3 Manual method
+
+Copy all the files in the C<dist/> directory to your site rules directory (e.g. C</etc/mail/spamassassin>)
+
+=head3 Automatic method
+
+TBD
+
 =head1 USAGE
 
   pdf2_count()
@@ -75,8 +85,8 @@ This plugin requires the following non-core perl modules:
         min: required, message contains at least x words in PDF attachments.
         max: optional, if specified, must not contain more than x PDF words
 
-        Note: This plugin does not extract text from PDF's. In order for pdf2_word_count to work the text must
-        be extracted by another plugin such as ExtractText.pm
+        Note: This plugin does not extract text from PDF's. In order for pdf2_word_count to work the text
+        must be extracted by another plugin such as ExtractText.pm
 
   pdf2_match_md5()
 
@@ -98,7 +108,8 @@ This plugin requires the following non-core perl modules:
         detail: Any standard PDF attribute: Author, Creator, Producer, Title, CreationDate, ModDate, etc..
         regex: regular expression
 
-        Fires if any PDF attachment has the given attribute and it's value matches the given regular expression
+        Fires if any PDF attachment has the given attribute and it's value matches the given regular
+        expression
 
   pdf2_is_encrypted()
 
@@ -106,8 +117,9 @@ This plugin requires the following non-core perl modules:
 
         Fires if any PDF attachment is encrypted
 
-        Note: PDF's can be encrypted with a blank password which allows them to be opened with any standard viewer.
-        This plugin attempts to decrypt PDF's with a blank password. However, pdf2_is_encrypted still returns true.
+        Note: PDF's can be encrypted with a blank password which allows them to be opened with any standard
+        viewer. This plugin attempts to decrypt PDF's with a blank password. However, pdf2_is_encrypted still
+        returns true.
 
   pdf2_is_protected()
 
@@ -115,9 +127,9 @@ This plugin requires the following non-core perl modules:
 
         Fires if any PDF attachment is encrypted with a non-blank password
 
-        Note: Although it's not possible to inspect the contents of password-protected PDF's, the following tests
-        may still yield valuable data: pdf2_count, pdf2_page_count, pdf2_match_md5, pdf2_match_fuzzy_md5, and
-        pdf2_match_details('Version')
+        Note: Although it's not possible to inspect the contents of password-protected PDF's, the following
+        tests may still yield valuable data: pdf2_count, pdf2_page_count, pdf2_match_md5,
+        pdf2_match_fuzzy_md5, and pdf2_match_details('Version')
 
 The following rules only inspect the first page of each document
 
@@ -137,7 +149,7 @@ The following rules only inspect the first page of each document
 
      body RULENAME  eval:pdf2_image_ratio(<min>,[max])
         min: required, images consume at least x percent of page 1 on any PDF attachment
-        max: optional, if specified, images do not consume more than x percent of page 1 on any PDF attachment
+        max: optional, if specified, images do not consume more than x percent of page 1
 
         Note: Percent values range from 0-100
 
@@ -183,9 +195,9 @@ Example C<add_header> lines:
 
 This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using the URIDetail.pm plugin. For example:
 
-    uri-detail RULENAME  raw =~ /^https?:\/\/bit\.ly\// type =~ /^pdf$/
+    uri-detail RULENAME  type =~ /^pdf$/  raw =~ /^https?:\/\/bit\.ly\//
 
-This will detect a PDF that contains a bit.ly link.
+This will detect a bit.ly link inside a PDF document
 
 =cut
 
