@@ -1,10 +1,26 @@
+package Mail::SpamAssassin::PDF::Context::Image;
 use strict;
 use warnings FATAL => 'all';
-package Mail::SpamAssassin::PDF::Context::Image;
 use Mail::SpamAssassin::PDF::Context;
 use Image::Magick;
 
 our @ISA = qw(Mail::SpamAssassin::PDF::Context);
+
+=head1 SYNOPSIS
+
+ Creates a representational image for each page of a PDF.
+
+ - Images are shown as a gray box with a red border
+ - Text is omitted
+ - Vector graphics are drawn with a black line and no fill
+ - Clickable areas are shaded blue
+
+ Files are output in PNG format and named page-000.png, page-001.png, etc...
+
+ This is mainly used for testing to make sure the parser is working correctly. This is not part of the distribution
+ package.
+
+=cut
 
 sub new {
     my $class = shift;

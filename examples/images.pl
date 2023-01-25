@@ -12,7 +12,9 @@ use Pod::Usage;
 
  images.pl <PDF_FILE>
 
- Creates an image for each page
+ Creates a representational image for each page of a PDF.
+
+ See Mail::SpamAssassin::PDF::Context::Image for more details
 
 =cut
 
