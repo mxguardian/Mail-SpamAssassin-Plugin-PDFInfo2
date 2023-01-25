@@ -12,7 +12,7 @@ our @ISA = qw(Mail::SpamAssassin::PDF::Context);
  Extracts text from a PDF.
 
  Too slow to be useful. Leaving code here for reference
- 
+
 =cut
 
 sub new {

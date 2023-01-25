@@ -4,7 +4,7 @@ use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Core;
 use Mail::SpamAssassin::PDF::Filter::FlateDecode;
 use Mail::SpamAssassin::PDF::Filter::Decrypt;
-use Mail::SpamAssassin::PDF::CMap;
+use Mail::SpamAssassin::PDF::Filter::CharMap;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 use Carp;
@@ -341,7 +341,7 @@ sub _parse_contents {
     if ( $context->isa('Mail::SpamAssassin::PDF::Context::Text') ) {
         $dispatch{Tf} = sub {
             my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$_[0]});
-            my $cmap = Mail::SpamAssassin::PDF::CMap->new();
+            my $cmap = Mail::SpamAssassin::PDF::Filter::CharMap->new();
             if (defined($font->{'/ToUnicode'})) {
                 $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
             }

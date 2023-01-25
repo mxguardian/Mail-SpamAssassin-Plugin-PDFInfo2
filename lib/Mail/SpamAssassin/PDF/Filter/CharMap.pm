@@ -1,4 +1,4 @@
-package Mail::SpamAssassin::PDF::CMap;
+package Mail::SpamAssassin::PDF::Filter::CharMap;
 use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Core;
