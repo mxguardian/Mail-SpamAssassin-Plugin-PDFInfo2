@@ -125,7 +125,13 @@ The following rules only inspect the first page of each document
 
      body RULENAME  eval:pdf2_image_count(<min>,[max])
         min: required, message contains at least x images on page 1 (all attachments combined).
-        max: optional, if specified, must not contain more than x PDF images on page 1
+        max: optional, if specified, must not contain more than x images on page 1
+
+  pdf2_color_image_count()
+
+     body RULENAME  eval:pdf2_color_image_count(<min>,[max])
+        min: required, message contains at least x color images on page 1 (all attachments combined).
+        max: optional, if specified, must not contain more than x color images on page 1
 
   pdf2_image_ratio()
 
@@ -147,27 +153,28 @@ The following rules only inspect the first page of each document
 
 The following tags can be defined in an C<add_header> line:
 
-    _PDF22COUNT_     - total number of pdf mime parts in the email
-    _PDF2PAGECOUNT_  - total number of pages in all pdf attachments
-    _PDF2WORDCOUNT_  - total number of words in all pdf attachments
-    _PDF2LINKCOUNT_  - total number of links in all pdf attachments
-    _PDF2IMAGECOUNT_ - total number of images found on page 1 inside all pdf attachments
-    _PDF2VERSION_    - PDF Version, space seperated if there are > 1 pdf attachments
-    _PDF2IMAGERATIO_ - Percent of first page that is consumed by images - per attachment, space separated
-    _PDF2CLICKRATIO_ - Percent of first page that is clickable - per attachment, space separated
-    _PDF2NAME_       - Filenames as found in the mime headers of PDF parts
-    _PDF2PRODUCER_   - Producer/Application that created the PDF(s)
-    _PDF2AUTHOR_     - Author of the PDF
-    _PDF2CREATOR_    - Creator/Program that created the PDF(s)
-    _PDF2TITLE_      - Title of the PDF File, if available
-    _PDF2MD5_        - MD5 checksum of PDF(s) - space seperated
-    _PDF2MD5FUZZY1_  - Fuzzy1 MD5 checksum of PDF(s) - space seperated
+    _PDF22COUNT_      - total number of pdf mime parts in the email
+    _PDF2PAGECOUNT_   - total number of pages in all pdf attachments
+    _PDF2WORDCOUNT_   - total number of words in all pdf attachments
+    _PDF2LINKCOUNT_   - total number of links in all pdf attachments
+    _PDF2IMAGECOUNT_  - total number of images found on page 1 inside all pdf attachments
+    _PDF2CIMAGECOUNT_ - total number of color images found on page 1 inside all pdf attachments
+    _PDF2VERSION_     - PDF Version, space seperated if there are > 1 pdf attachments
+    _PDF2IMAGERATIO_  - Percent of first page that is consumed by images - per attachment, space separated
+    _PDF2CLICKRATIO_  - Percent of first page that is clickable - per attachment, space separated
+    _PDF2NAME_        - Filenames as found in the mime headers of PDF parts
+    _PDF2PRODUCER_    - Producer/Application that created the PDF(s)
+    _PDF2AUTHOR_      - Author of the PDF
+    _PDF2CREATOR_     - Creator/Program that created the PDF(s)
+    _PDF2TITLE_       - Title of the PDF File, if available
+    _PDF2MD5_         - MD5 checksum of PDF(s) - space seperated
+    _PDF2MD5FUZZY1_   - Fuzzy1 MD5 checksum of PDF(s) - space seperated
 
 Example C<add_header> lines:
 
     add_header all PDF-Info pdf=_PDF2COUNT_, ver=_PDF2VERSION_, name=_PDF2NAME_
     add_header all PDF-Details producer=_PDF2PRODUCER_, author=_PDF2AUTHOR_, creator=_PDF2CREATOR_, title=_PDF2TITLE_
-    add_header all PDF-ImageInfo images=_PDF2IMAGECOUNT_ ratios=_PDF2IMAGERATIO_
+    add_header all PDF-ImageInfo images=_PDF2IMAGECOUNT_ cimages=_PDF2CIMAGECOUNT_ ratios=_PDF2IMAGERATIO_
     add_header all PDF-LinkInfo links=_PDF2LINKCOUNT_, ratios=_PDF2CLICKRATIO_
     add_header all PDF-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
 
@@ -209,6 +216,7 @@ sub new {
 
     $self->register_eval_rule ("pdf2_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_image_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_color_image_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_link_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_word_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_page_count", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
@@ -218,6 +226,7 @@ sub new {
     $self->register_eval_rule ("pdf2_match_fuzzy_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_is_protected", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
     $self->register_method_priority ("parsed_metadata", -1);
@@ -231,24 +240,23 @@ sub parsed_metadata {
     my $pms = $opts->{permsgstatus};
 
     # initialize
-    $pms->{pdfinfo2}->{totals}->{ImageCount} = 0;
     $pms->{pdfinfo2}->{files} = {};
+    $pms->{pdfinfo2}->{totals} = {
+        FileCount       => 0,
+        ImageCount      => 0,
+        ColorImageCount => 0,
+        LinkCount       => 0,
+        PageCount       => 0,
+        WordCount       => 0
+    };
 
-    my @parts = $pms->{msg}->find_parts(qr@^(image|application)/(pdf|octet\-stream)$@, 1);
-    my $part_count = scalar @parts;
-
-    dbg("pdfinfo2: Identified $part_count possible mime parts that need checked for PDF content");
-
-    foreach my $p (@parts) {
+    foreach my $p ($pms->{msg}->find_parts(qr/./,1)) {
         my $type = $p->{type} || '';
         my $name = $p->{name} || '';
 
-        dbg("pdfinfo2: found part, type=$type file=$name");
+        next unless $type =~ qr/\/pdf$/ or $name =~ /\.pdf$/i;
 
-        # filename must end with .pdf, or application type can be pdf
-        # sometimes windows muas will wrap a pdf up inside a .dat file
-        # v0.8 - Added .fdf phoney PDF detection
-        next unless ($name =~ /\.[fp]df$/i || $type =~ m@/pdf$@);
+        dbg("pdfinfo2: found part, type=$type file=$name");
 
         _set_tag($pms, 'PDF2NAME', $name);
         $pms->{pdfinfo2}->{totals}->{FileCount}++;
@@ -283,12 +291,14 @@ sub parsed_metadata {
 
         $pms->{pdfinfo2}->{files}->{$name} = $info;
         $pms->{pdfinfo2}->{totals}->{ImageCount} += $info->{ImageCount};
+        $pms->{pdfinfo2}->{totals}->{ColorImageCount} += $info->{ColorImageCount};
         $pms->{pdfinfo2}->{totals}->{PageCount} += $info->{PageCount};
         $pms->{pdfinfo2}->{totals}->{LinkCount} += $info->{LinkCount};
         $pms->{pdfinfo2}->{totals}->{WordCount} += $info->{WordCount};
         $pms->{pdfinfo2}->{totals}->{ImageArea} += $info->{ImageArea};
         $pms->{pdfinfo2}->{totals}->{PageArea} += $info->{PageArea};
         $pms->{pdfinfo2}->{totals}->{Encrypted} += $info->{Encrypted};
+        $pms->{pdfinfo2}->{totals}->{Protected} += $info->{Protected};
         $pms->{pdfinfo2}->{md5}->{$md5} = 1;
 
         _set_tag($pms, 'PDF2PRODUCER', $info->{Producer});
@@ -308,6 +318,7 @@ sub parsed_metadata {
 
     _set_tag($pms, 'PDF2COUNT', $pms->{pdfinfo2}->{totals}->{FileCount} );
     _set_tag($pms, 'PDF2IMAGECOUNT', $pms->{pdfinfo2}->{totals}->{ImageCount});
+    _set_tag($pms, 'PDF2CIMAGECOUNT', $pms->{pdfinfo2}->{totals}->{ColorImageCount});
     _set_tag($pms, 'PDF2WORDCOUNT', $pms->{pdfinfo2}->{totals}->{WordCount});
     _set_tag($pms, 'PDF2PAGECOUNT', $pms->{pdfinfo2}->{totals}->{PageCount});
     _set_tag($pms, 'PDF2LINKCOUNT', $pms->{pdfinfo2}->{totals}->{LinkCount});
@@ -336,6 +347,12 @@ sub pdf2_is_encrypted {
     return $pms->{pdfinfo2}->{totals}->{Encrypted} ? 1 : 0;
 }
 
+sub pdf2_is_protected {
+    my ($self, $pms, $body) = @_;
+
+    return $pms->{pdfinfo2}->{totals}->{Protected} ? 1 : 0;
+}
+
 sub pdf2_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
@@ -346,6 +363,12 @@ sub pdf2_image_count {
     my ($self, $pms, $body, $min, $max) = @_;
 
     return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{ImageCount});
+}
+
+sub pdf2_color_image_count {
+    my ($self, $pms, $body, $min, $max) = @_;
+
+    return _result_check($min, $max, $pms->{pdfinfo2}->{totals}->{ColorImageCount});
 }
 
 sub pdf2_image_ratio {
@@ -379,8 +402,6 @@ sub pdf2_match_fuzzy_md5 {
     my ($self, $pms, $body, $md5) = @_;
 
     return 0 unless defined $md5;
-    dbg("pdfinfo2: Looking up $md5");
-    dbg("pdfinfo2: ".Dumper($pms->{pdfinfo2}->{fuzzy_md5}));
     return 1 if exists $pms->{pdfinfo2}->{fuzzy_md5}->{uc $md5};
     return 0;
 }

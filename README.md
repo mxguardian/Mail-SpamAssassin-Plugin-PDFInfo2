@@ -103,7 +103,13 @@ The following rules only inspect the first page of each document
 
        body RULENAME  eval:pdf2_image_count(<min>,[max])
           min: required, message contains at least x images on page 1 (all attachments combined).
-          max: optional, if specified, must not contain more than x PDF images on page 1
+          max: optional, if specified, must not contain more than x images on page 1
+
+    pdf2_color_image_count()
+
+       body RULENAME  eval:pdf2_color_image_count(<min>,[max])
+          min: required, message contains at least x color images on page 1 (all attachments combined).
+          max: optional, if specified, must not contain more than x color images on page 1
 
     pdf2_image_ratio()
 
@@ -125,27 +131,28 @@ The following rules only inspect the first page of each document
 
 The following tags can be defined in an `add_header` line:
 
-    _PDF22COUNT_     - total number of pdf mime parts in the email
-    _PDF2PAGECOUNT_  - total number of pages in all pdf attachments
-    _PDF2WORDCOUNT_  - total number of words in all pdf attachments
-    _PDF2LINKCOUNT_  - total number of links in all pdf attachments
-    _PDF2IMAGECOUNT_ - total number of images found on page 1 inside all pdf attachments
-    _PDF2VERSION_    - PDF Version, space seperated if there are > 1 pdf attachments
-    _PDF2IMAGERATIO_ - Percent of first page that is consumed by images - per attachment, space separated
-    _PDF2CLICKRATIO_ - Percent of first page that is clickable - per attachment, space separated
-    _PDF2NAME_       - Filenames as found in the mime headers of PDF parts
-    _PDF2PRODUCER_   - Producer/Application that created the PDF(s)
-    _PDF2AUTHOR_     - Author of the PDF
-    _PDF2CREATOR_    - Creator/Program that created the PDF(s)
-    _PDF2TITLE_      - Title of the PDF File, if available
-    _PDF2MD5_        - MD5 checksum of PDF(s) - space seperated
-    _PDF2MD5FUZZY1_  - Fuzzy1 MD5 checksum of PDF(s) - space seperated
+    _PDF22COUNT_      - total number of pdf mime parts in the email
+    _PDF2PAGECOUNT_   - total number of pages in all pdf attachments
+    _PDF2WORDCOUNT_   - total number of words in all pdf attachments
+    _PDF2LINKCOUNT_   - total number of links in all pdf attachments
+    _PDF2IMAGECOUNT_  - total number of images found on page 1 inside all pdf attachments
+    _PDF2CIMAGECOUNT_ - total number of color images found on page 1 inside all pdf attachments
+    _PDF2VERSION_     - PDF Version, space seperated if there are > 1 pdf attachments
+    _PDF2IMAGERATIO_  - Percent of first page that is consumed by images - per attachment, space separated
+    _PDF2CLICKRATIO_  - Percent of first page that is clickable - per attachment, space separated
+    _PDF2NAME_        - Filenames as found in the mime headers of PDF parts
+    _PDF2PRODUCER_    - Producer/Application that created the PDF(s)
+    _PDF2AUTHOR_      - Author of the PDF
+    _PDF2CREATOR_     - Creator/Program that created the PDF(s)
+    _PDF2TITLE_       - Title of the PDF File, if available
+    _PDF2MD5_         - MD5 checksum of PDF(s) - space seperated
+    _PDF2MD5FUZZY1_   - Fuzzy1 MD5 checksum of PDF(s) - space seperated
 
 Example `add_header` lines:
 
     add_header all PDF-Info pdf=_PDF2COUNT_, ver=_PDF2VERSION_, name=_PDF2NAME_
     add_header all PDF-Details producer=_PDF2PRODUCER_, author=_PDF2AUTHOR_, creator=_PDF2CREATOR_, title=_PDF2TITLE_
-    add_header all PDF-ImageInfo images=_PDF2IMAGECOUNT_ ratios=_PDF2IMAGERATIO_
+    add_header all PDF-ImageInfo images=_PDF2IMAGECOUNT_ cimages=_PDF2CIMAGECOUNT_ ratios=_PDF2IMAGERATIO_
     add_header all PDF-LinkInfo links=_PDF2LINKCOUNT_, ratios=_PDF2CLICKRATIO_
     add_header all PDF-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
 

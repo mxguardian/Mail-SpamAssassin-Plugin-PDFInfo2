@@ -274,7 +274,7 @@ sub _parse_xobject {
         my $ref = $xobject->{$name};
         my $obj = $xobject->{$name} = $self->_get_obj($ref);
         if ( $obj->{'/Subtype'} eq '/Image' ) {
-            # $self->_parse_image('image',$ref,$obj,$name);
+            $obj->{'/ColorSpace'} = $self->_dereference($obj->{'/ColorSpace'});
         } elsif ( $obj->{'/Subtype'} eq '/Form' ) {
             $obj->{'/Resources'} = $self->_parse_resources($obj->{'/Resources'}) if (defined($obj->{'/Resources'}));
         }

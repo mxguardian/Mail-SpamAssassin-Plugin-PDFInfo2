@@ -13,6 +13,7 @@ sub new {
     my $self = $class->SUPER::new(@_);
     $self->{info} = {
         ImageCount => 0,
+        ColorImageCount => 0,
         PageCount  => 0,
         PageArea   => 0,
         ImageArea  => 0,
@@ -61,13 +62,18 @@ sub page_begin {
 sub draw_image {
     my ($self,$image,$page) = @_;
 
+    my $is_color = 1;
+    $is_color = 0 if defined($image->{'/ColorSpace'}) && $image->{'/ColorSpace'} =~ /gray/i;
+    $is_color = 0 if defined($image->{'/BitsPerComponent'}) && $image->{'/BitsPerComponent'} == 1;
+
+    # print Dumper($image); exit;
+
     my $fuzzy_data = $self->serialize_fuzzy($image);
     $self->{fuzzy_md5}->add( $fuzzy_data );
     $self->{fuzzy_md5_data} .= $fuzzy_data;
 
     $self->{info}->{ImageCount}++;
-
-    # print $image->{_name},"\n";
+    $self->{info}->{ColorImageCount}++ if $is_color;
 
     # Calculate image area in user space
     my $ctm = $self->{gs}->{ctm};

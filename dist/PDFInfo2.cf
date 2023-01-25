@@ -1,4 +1,7 @@
 loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2     PDFInfo2.pm
 
-add_header all PDF2-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
-add_header all PDF2-Details producer=_PDF2PRODUCER_, author=_PDF2AUTHOR_, creator=_PDF2CREATOR_, title=_PDF2TITLE_, image_ratio=_PDF2IMAGERATIO_, click_ratio=_PDF2CLICKRATIO_
+# add_header all PDF-Info pdf=_PDF2COUNT_, ver=_PDF2VERSION_, name=_PDF2NAME_
+# add_header all PDF-Details producer=_PDF2PRODUCER_, author=_PDF2AUTHOR_, creator=_PDF2CREATOR_, title=_PDF2TITLE_
+# add_header all PDF-ImageInfo images=_PDF2IMAGECOUNT_ cimages=_PDF2CIMAGECOUNT_ ratios=_PDF2IMAGERATIO_
+# add_header all PDF-LinkInfo links=_PDF2LINKCOUNT_, ratios=_PDF2CLICKRATIO_
+# add_header all PDF-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
