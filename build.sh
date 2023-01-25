@@ -1,9 +1,9 @@
 #!/usr/bin/sh
 #
-# This script concatenates all the source files into a single plugin file in the build directory
+# This script concatenates all the source files into a single plugin file in the dist directory
 #
 
-OUTFILE=build/PDFInfo2.pm
+OUTFILE=dist/PDFInfo2.pm
 
 cp /dev/null $OUTFILE
 
