@@ -10,6 +10,7 @@ my @tests = (
         filename => 't/data/North Gaston HS flyer.pdf',
         expected => {
             'Encrypted'    => 0,
+            'Protected'    => 0,
             'Version'      => '1.6',
             'PageCount'    => 4,
             'Producer'     => 'Adobe PDF Library 10.0.1',
@@ -33,6 +34,7 @@ my @tests = (
         filename => 't/data/how_to_manage_club_members_en.pdf',
         expected   => {
             'Encrypted' => 0,
+            'Protected'    => 0,
             'Version' => '1.5',
             'Producer' => 'Foxit PhantomPDF Printer Version 9.1.0.0531',
             'ImageCount' => 12,
@@ -58,6 +60,7 @@ my @tests = (
         filename => 't/data/Encrypted.pdf',
         expected => {
             'Encrypted' => 1,
+            'Protected'    => 0,
             'Version' => '1.4',
             'CreationDate' => 'D:20230106154216+03\'00\'',
             'Creator' => 'wkhtmltopdf 0.12.5',
@@ -80,6 +83,7 @@ my @tests = (
     {
         filename => 't/data/Encrypted2.pdf',
         expected => {
+            'Protected'    => 0,
             'CreationDate' => 'D:20230102234612+00\'00\'',
             'PageCount' => 1,
             'Version' => '1.4',
@@ -103,6 +107,7 @@ my @tests = (
     {
         filename => 't/data/Encrypted3.pdf',
         expected => {
+            'Protected'    => 0,
             'Producer' => "iText\xAE 5.5.13.3 \xA92000-2022 iText Group NV (AGPL-version)",
             'ImageArea' => 175000,
             'ImageRatio' => '34.93',
@@ -125,6 +130,7 @@ my @tests = (
     {
         filename => 't/data/VectorText.pdf',
         expected => {
+            'Protected'    => 0,
             'LinkCount' => 2,
             'Title' => '',
             'Encrypted' => 0,
@@ -149,6 +155,7 @@ my @tests = (
     {
         filename => 't/data/Phishing.pdf',
         expected => {
+            'Protected'    => 0,
             'Encrypted' => 0,
             'Version' => '1.5',
             'ImageRatio' => '33.08',
@@ -171,6 +178,7 @@ my @tests = (
     {
         filename => 't/data/Phishing2.pdf',
         expected => {
+            'Protected'    => 0,
             'Encrypted'    => 0,
             'Version'      => '1.3',
             'ImageRatio' => '100.00',
@@ -191,8 +199,9 @@ my @tests = (
         }
     },
     {
-        filename => 't/data/SlicedImages.pdf',
+        filename => 't/data/ImageText.pdf',
         expected => {
+            'Protected'    => 0,
             'Encrypted' => 0,
             'Version' => '1.7',
             'PageCount' => 1,
@@ -219,6 +228,7 @@ my @tests = (
     {
         filename => 't/data/CamScanner.pdf',
         expected => {
+            'Protected'    => 0,
             'Encrypted' => 0,
             'PageCount' => 1,
             'Producer' => 'intsig.com pdf producer',
@@ -244,6 +254,7 @@ my @tests = (
     {
         filename => 't/data/Paypal.pdf',
         expected => {
+            'Protected'    => 0,
             'PageArea' => 484704,
             'CreationDate' => 'D:20221219182546+05\'30\'',
             'uris' => {},
@@ -266,6 +277,7 @@ my @tests = (
     {
         filename => 't/data/GeekSquad.pdf',
         expected => {
+            'Protected'    => 0,
             'LinkCount' => 0,
             'ImageRatio' => '100.00',
             'ClickArea' => 0,
@@ -283,6 +295,7 @@ my @tests = (
     {
         filename => 't/data/Bitcoin.pdf',
         expected => {
+            'Protected'    => 0,
             'Version' => '1.3',
             'LinkCount' => 1,
             'Title' => '',
@@ -305,6 +318,24 @@ my @tests = (
             'ModDate' => 'D:20230120165641+03\'00\'',
             'PageArea' => 500990,
             'ClickArea' => 295697
+        }
+    },
+    {
+        filename => 't/data/Password.pdf',
+        expected => {
+            'Version' => '1.6',
+            'uris' => {},
+            'Protected' => 1,
+            'FuzzyMD5' => 'B04B5F350BCCF114F253147F71007C84',
+            'ImageCount' => 0,
+            'Encrypted' => 1,
+            'PageCount' => 2,
+            'ClickRatio' => '0.00',
+            'ClickArea' => 0,
+            'PageArea' => 530067,
+            'ImageArea' => 0,
+            'ImageRatio' => '0.00',
+            'LinkCount' => 0
         }
     },
 );

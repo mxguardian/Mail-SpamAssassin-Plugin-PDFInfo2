@@ -19,6 +19,8 @@ sub new {
         trailer      => {},
         pages        => [],
         images       => {},
+        is_encrypted => 0,
+        is_protected => 0,
         core         => Mail::SpamAssassin::PDF::Core->new(),
 
         object_cache => {},
@@ -66,16 +68,6 @@ sub parse {
 
 }
 
-sub get_page_count {
-    my $self = shift;
-    scalar(@{$self->{pages}});
-}
-
-sub get_image_count {
-    my $self = shift;
-    scalar(keys %{$self->{images}});
-}
-
 sub version {
     shift->{version};
 }
@@ -85,7 +77,11 @@ sub info {
 }
 
 sub is_encrypted {
-    defined(shift->{trailer}->{'/Encrypt'}) ? 1 : 0;
+    shift->{is_encrypted};
+}
+
+sub is_protected {
+    shift->{is_protected};
 }
 
 ###################
@@ -182,7 +178,14 @@ sub _parse_encrypt {
         die "Encryption filter $encrypt->{'/Filter'} not implemented";
     }
 
-    $self->{core}->{crypt} = Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
+    $self->{core}->{crypt} = eval {
+        Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
+    };
+
+    if (!defined($self->{core}->{crypt})) {
+        $self->{is_protected} = 1;
+    }
+    $self->{is_encrypted} = 1;
 
 }
 
@@ -292,12 +295,13 @@ sub _parse_xobject {
 
 sub _parse_contents {
     my ($self,$contents,$page) = @_;
-    my $core = Mail::SpamAssassin::PDF::Core->new;
+    return if $self->is_protected();
 
     $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
 
     #@type Mail::SpamAssassin::PDF::Context
     my $context = $self->{context};
+    my $core = Mail::SpamAssassin::PDF::Core->new;
     my @params;
 
     # Build a dispatch table

@@ -112,13 +112,17 @@ sub parse_end {
         $self->{info}->{ClickRatio} = 0;
     }
 
-    for (keys %{$parser->{trailer}->{'/Info'}}) {
-        my $key = $_;
-        $key =~ s/^\///; # Trim leading slash
-        $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
+    if ( !$parser->is_protected() ) {
+        for (keys %{$parser->{trailer}->{'/Info'}}) {
+            my $key = $_;
+            $key =~ s/^\///; # Trim leading slash
+            $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
+        }
     }
 
-    $self->{info}->{Encrypted} = defined($parser->{trailer}->{'/Encrypt'}) ? 1 : 0;
+    $self->{info}->{Encrypted} = $parser->is_encrypted();
+    $self->{info}->{Protected} = $parser->is_protected();
+
     $self->{info}->{Version} = $parser->{version};
     $self->{info}->{FuzzyMD5} = uc($self->{fuzzy_md5}->hexdigest());
     # $self->{info}->{FuzzyMD5Data} = $self->{fuzzy_md5_data};

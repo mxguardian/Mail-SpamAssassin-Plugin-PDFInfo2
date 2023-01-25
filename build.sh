@@ -24,3 +24,4 @@ echo >>$OUTFILE
 sed -e '1,/^=cut/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
 
 
+pod2markdown lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >README.md
