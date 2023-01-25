@@ -18,18 +18,17 @@ sub new {
         xref         => {},
         trailer      => {},
         pages        => [],
-        images       => {},
         is_encrypted => 0,
         is_protected => 0,
+
         core         => Mail::SpamAssassin::PDF::Core->new(),
+        context      => $opts{context} || Mail::SpamAssassin::PDF::Context::Info->new(),
 
         object_cache => {},
         stream_cache => {},
     }, $class;
 
     $debug = $opts{debug};
-
-    $self->{context} = $opts{context} || Mail::SpamAssassin::PDF::Context::Info->new();
 
     $self;
 }
@@ -43,7 +42,7 @@ sub parse {
     $self->{data} = $data;
 
     # Parse cross-reference table (and trailer)
-    $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or die "EOF marker not found";
+    $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
     $self->_parse_xref($1);
 
     # Parse encryption dictionary
@@ -100,14 +99,11 @@ sub _parse_xref {
     while ($self->{data} =~ /\G(\d+) (\d+)\s+/) {
         pos($self->{data}) = $+[0]; # advance the pointer
         my ($start,$count) = ($1,$2);
-        # print "xref $start $count\n";
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
             $self->{data} =~ /\G(\d+) (\d+) (f|n)\s+/g or die "Invalid xref entry";
-            # print "$1 $2 $3\n";
             next unless $3 eq 'n';
             my ($offset,$gen) = ($1+0,$2+0);
             my $key = "$i $gen R";
-            # print "$key = $offset\n";
             $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
         }
     }
@@ -132,7 +128,6 @@ sub _parse_xref_stream {
     pos($self->{data}) = $pos;
 
     my $xref = $self->{core}->get_dict(\$self->{data});
-    # print Dumper($xref);
     my ($start,$count) = (0,$xref->{'/Size'});
     if ( defined($xref->{'/Index'}) ) {
         $start = $xref->{'/Index'}->[0];
@@ -145,18 +140,15 @@ sub _parse_xref_stream {
 
     for ( my ($i,$n,$o)=($start,0,0); $n<$count; $i++,$n++,$o+=$width ) {
         my ($type,@fields) = map { hex($_) } unpack("x$o $template",$data);
-        # print join(',',@fields),"\n";
         if ( $type == 0 ) {
             next;
         } elsif ( $type == 1 ) {
             my ($offset,$gen) = @fields;
             my $key = "$i $gen R";
-            # print "$key = $offset\n";
             $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
         } elsif ( $type == 2 ) {
             my ($obj,$index) = @fields;
             my $key = "$i 0 R";
-            # print "$key = $obj,$index\n";
             $self->{xref}->{$key} = [ "$obj 0 R", $index ] unless defined($self->{xref}->{$key});
         }
     }
@@ -181,8 +173,8 @@ sub _parse_encrypt {
     $self->{core}->{crypt} = eval {
         Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
     };
-
-    if (!defined($self->{core}->{crypt})) {
+    if ( !defined($self->{core}->{crypt}) ) {
+        die $@ unless $@ =~ /password/;
         $self->{is_protected} = 1;
     }
     $self->{is_encrypted} = 1;
@@ -193,8 +185,6 @@ sub _parse_pages {
     my ($self,$node,$parent_node) = @_;
     $node = $self->_dereference($node);
     return unless defined($node);
-
-    debug('pages',$node);
 
     # inherit properties
     $parent_node = {} unless defined($parent_node);
@@ -286,7 +276,6 @@ sub _parse_xobject {
         if ( $obj->{'/Subtype'} eq '/Image' ) {
             # $self->_parse_image('image',$ref,$obj,$name);
         } elsif ( $obj->{'/Subtype'} eq '/Form' ) {
-            # print "Form: $name $ref\n";
             $obj->{'/Resources'} = $self->_parse_resources($obj->{'/Resources'}) if (defined($obj->{'/Resources'}));
         }
     }
@@ -354,7 +343,6 @@ sub _parse_contents {
             my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$_[0]});
             my $cmap = Mail::SpamAssassin::PDF::CMap->new();
             if (defined($font->{'/ToUnicode'})) {
-                # print "$font->{'/ToUnicode'}\n";
                 $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
             }
             $context->text_font($font, $cmap);
@@ -375,11 +363,8 @@ sub _parse_contents {
                 push(@params,$token);
                 next;
             }
-            debug('tokens',$token.' '.join(',',@params));
             if ( defined($dispatch{$token}) ) {
                 $dispatch{$token}->(@params);
-            } else {
-                # print "Skipping: $token\n";
             }
             @params = ();
         }
@@ -429,21 +414,16 @@ sub _get_compressed_obj {
     my $obj = $1;
 
     my $stream_obj = $self->_get_obj($stream_obj_ref);
-    # print Dumper($stream_obj);
     my $data = $self->_get_stream_data($stream_obj);
 
     if ( !defined($stream_obj->{pos}) ) {
         while ( $data =~ /\G\s*(\d+) (\d+)\s+/ ) {
             $stream_obj->{xref}->{$1} = $2;
             pos($data) = $+[0];
-            # print "$1 -> $2\n";
         }
         $stream_obj->{pos} = pos($data);
     }
 
-    # print $data,"\n\n";
-    # print "$stream_obj_ref, $index, $ref\n";
-    # print $stream_obj->{pos}." + ".$stream_obj->{xref}->{$obj},"\n";
     pos($data) = $stream_obj->{pos} + $stream_obj->{xref}->{$obj};
     return $self->{object_cache}->{$ref} = $self->{core}->get_primitive(\$data);
 }

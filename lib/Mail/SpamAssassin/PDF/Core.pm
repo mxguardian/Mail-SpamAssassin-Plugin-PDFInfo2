@@ -5,6 +5,12 @@ use Encode qw(from_to decode);
 use Carp;
 use Data::Dumper;
 
+=head1 ACKNOWLEDGEMENTS
+
+Portions borrowed from CAM::PDF
+
+=cut
+
 sub new {
     my ($class) = @_;
     bless {},$class;
@@ -115,7 +121,6 @@ sub get_dict {
         last if $_ eq '>>';
         push(@array,$_);
     }
-    # print Dumper(\@array);
 
     my %dict = @array;
 
@@ -135,11 +140,6 @@ sub get_primitive {
     local $_;
 
     while () {
-        # $$ptr =~ /\G\s*( \/[^\/%\(\)\[\]<>{}\s]* | <{1,2} | >> | \[ | \] | \( | \d+\s\d+\sR\b | [-+]?\d+(?:\.\d+)? | [-+]?\.\d+ | true | false | null | \%[^\n]*\n | [^\/%\(\)\[\]<>{}\s]+ | $ )/x or do {
-        #     print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
-        #     croak "Unknown primitive at offset ".pos($$ptr);
-        # };
-        # print "> $1\n";
         if ( $$ptr =~ /\G\s*<</ ) {
             return $self->get_dict($ptr);
         }
@@ -179,10 +179,10 @@ sub get_primitive {
         }
         if ( $$ptr =~ /\G\s*$/ ) {
             # EOF
-            return wantarray ? (undef,undef) : undef;
+            return;
         }
 
-        print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
+        # print substr($$ptr,pos($$ptr)-10,10)."|".substr($$ptr,pos($$ptr),20),"\n";
         croak "Unknown primitive at offset ".pos($$ptr);
 
     }

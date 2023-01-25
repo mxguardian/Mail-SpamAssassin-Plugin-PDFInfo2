@@ -14,10 +14,10 @@ sub new {
     },$class;
 }
 
-sub to_utf8 {
+sub convert {
     my ($self,$data) = @_;
 
-    $data = encode('UTF-16BE',$data);
+    $data = encode('UTF-16BE',$data) unless $data =~ /^\x00/; # hackish way to tell if already UTF-16
 
     my $str = '';
     for my $code (unpack("n*",$data)) {
@@ -54,9 +54,6 @@ sub parse_stream {
 
 sub _parse_bfchar {
     my ($self,$ptr,$count) = @_;
-
-    # print $$ptr;
-    # print pos($$ptr);
 
     while ($count--) {
         # print substr($$ptr,pos($$ptr),20),"\n";

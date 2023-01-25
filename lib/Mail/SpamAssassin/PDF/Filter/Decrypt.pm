@@ -7,7 +7,7 @@ use Crypt::Mode::CBC;
 use Carp;
 use Data::Dumper;
 
-=head1 SYNOPSIS
+=head1 ACKNOWLEDGEMENTS
 
 Portions borrowed from CAM::PDF
 
@@ -46,7 +46,7 @@ sub new {
 
     my $password = '';
 
-    if ( !$self->check_user_password($password) ) {
+    if ( !$self->_check_user_password($password) ) {
         croak "Document is password-protected.";
     }
 
@@ -75,7 +75,7 @@ sub decrypt {
 #
 # Algorithm 3.6 Authenticating the user password
 #
-sub check_user_password {
+sub _check_user_password {
     my ($self,$pass) = @_;
 
     # step 1  Perform all but the last step of Algorithm 3.4 (Revision 2) or Algorithm 3.5 (Revision 3) using the supplied password string.
@@ -86,7 +86,7 @@ sub check_user_password {
         #
 
         # step 1 Create an encryption key based on the user password string, as described in Algorithm 3.2
-        my $key = $self->generate_key($pass);
+        my $key = $self->_generate_key($pass);
 
         # step 2 Initialize the MD5 hash function and pass the 32-byte padding string as input to this function
         my $md5 = Digest::MD5->new();
@@ -131,7 +131,7 @@ sub check_user_password {
 #
 # Algorithm 3.2 Computing an encryption key
 #
-sub generate_key {
+sub _generate_key {
     my ($self,$pass) = @_;
 
     # step 1 Pad or truncate the password string to exactly 32 bytes

@@ -7,9 +7,18 @@ use Data::Dumper;
 
 our @ISA = qw(Mail::SpamAssassin::PDF::Context);
 
+=head1 SYNOPSIS
+
+ Extracts text from a PDF.
+
+ Too slow to be useful. Leaving code here for reference
+ 
+=cut
+
 sub new {
     my $class = shift;
     my $self = $class->SUPER::new(@_);
+    $self->{text} = '';
     $self;
 }
 
@@ -29,10 +38,9 @@ sub text {
     my ($self,$text) = @_;
     # print $text,"\n";
     # print unpack("H*",$text),"\n";
-    print $self->{cmap}->to_utf8($text);
-    # exit;
+    $self->{text} .= $self->{cmap}->convert($text);
 }
 
 sub text_newline {
-    print "\n";
+    shift->{text} .= "\n";
 }
