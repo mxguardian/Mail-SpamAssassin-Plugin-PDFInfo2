@@ -31,9 +31,20 @@ simultaneously, if desired.
 
 Encryption routines were made possible by borrowing some code from CAM::PDF by Chris Dolan
 
-=head1 SYNOPSIS
+Links to the official PDF specification:
 
-  loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2
+=over 1
+
+=item Version 1.6: L<https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.6.pdf>
+
+=item Version 1.7: L<https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf>
+
+=back
+
+=head1 DISCLAIMERS
+
+This code has been tested and B<should> function fine in a production environment. However, use it at your own risk.
+The author of this package is not affiliated with SpamAssassin or the Apache Software Foundation
 
 =head1 REQUIREMENTS
 
@@ -57,7 +68,11 @@ Copy all the files in the C<dist/> directory to your site rules directory (e.g. 
 
 TBD
 
-=head1 USAGE
+=head1 SYNOPSIS
+
+  loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2
+
+=head1 RULE DEFINITIONS
 
   pdf2_count()
 
@@ -128,8 +143,8 @@ TBD
         Fires if any PDF attachment is encrypted with a non-blank password
 
         Note: Although it's not possible to inspect the contents of password-protected PDF's, the following
-        tests may still yield valuable data: pdf2_count, pdf2_page_count, pdf2_match_md5,
-        pdf2_match_fuzzy_md5, and pdf2_match_details('Version')
+        tests still provide meaningful data: pdf2_count, pdf2_page_count, pdf2_match_md5,
+        pdf2_match_fuzzy_md5, and pdf2_match_details('Version'). All other values will be empty/zero.
 
 The following rules only inspect the first page of each document
 
