@@ -196,6 +196,7 @@ The following tags can be defined in an C<add_header> line:
     _PDF2TITLE_       - Title of the PDF File, if available
     _PDF2MD5_         - MD5 checksum of PDF(s) - space seperated
     _PDF2MD5FUZZY1_   - Fuzzy1 MD5 checksum of PDF(s) - space seperated
+    _PDF2MD5FUZZY2_   - Fuzzy2 MD5 checksum of PDF(s) - space seperated
 
 Example C<add_header> lines:
 
@@ -205,6 +206,20 @@ Example C<add_header> lines:
     add_header all PDF-LinkInfo links=_PDF2LINKCOUNT_, ratios=_PDF2CLICKRATIO_
     add_header all PDF-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
 
+
+=head1 MD5 CHECKSUMS
+
+To view the MD5 checksums for a message you can run:
+
+    cat msg.eml | spamassassin -D -L |& grep PDF2MD5
+
+The Fuzzy 1 checksum is calculated using tags from every object that is traversed which is essentially pages,
+images, and the document trailer. You should expect a match if two PDF's were created by the same author/program
+and have the same structure with the same or slightly different content.
+
+The Fuzzy 2 checksum only includes the comment lines at the beginning of the document plus the first object. The
+Fuzzy 2 checksum is generally an indicator of what software created the PDF but the contents could be totally
+different.
 
 =head1 URI DETAILS
 
@@ -633,8 +648,29 @@ sub parse_end {
     $self->{info}->{Protected} = $parser->is_protected();
 
     $self->{info}->{Version} = $parser->{version};
-    $self->{info}->{FuzzyMD5} = uc($self->{fuzzy_md5}->hexdigest());
+    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
     # $self->{info}->{FuzzyMD5Data} = $self->{fuzzy_md5_data};
+
+
+    # Compute MD5 Fuzzy2
+    # Start at beginning, get comments + first object
+    my $md5 = Digest::MD5->new();
+    pos($parser->{data}) = 0;
+    while ( $parser->{data} =~ /\G(%[^\n]+\n)/gc ) {
+        # print "> $1";
+        $md5->add($1);
+    }
+    if ( $parser->{data} =~ /\G\s*(\d+ \d+ obj\s*)/g ) {
+        # print "> $1";
+        $md5->add($1); # include object number
+        my $obj = $parser->{core}->get_primitive(\$parser->{data});
+        my $str = $self->serialize_fuzzy($obj);
+        # print "> $str\n";
+        $md5->add($str);
+    }
+
+    $self->{info}->{MD5Fuzzy2} = uc($md5->hexdigest());
+
 
 }
 
@@ -642,12 +678,15 @@ sub serialize_fuzzy {
     my ($self,$obj) = @_;
 
     if ( !defined($obj) ) {
+        # undef
         return 'U';
     } elsif ( ref($obj) eq 'ARRAY' ) {
+        # recurse into arrays
         my $str = '';
         $str .= $self->serialize_fuzzy($_) for @$obj;
         return $str;
     } elsif ( ref($obj) eq 'HASH' ) {
+        # recurse into dictionaries
         my $str = '';
         foreach (sort keys %$obj) {
             next unless /^\//;
@@ -655,18 +694,23 @@ sub serialize_fuzzy {
         }
         return $str;
     } elsif ( $obj =~ /^\d+ \d+ R$/ )  {
+        # object reference
         return 'R';
     } elsif ( $obj =~ /^[\d.+-]+$/ ) {
+        # number
         return 'N';
     } elsif ( $obj =~ /^D:/ ) {
+        # date
         return 'D';
     }
 
+    # replace binary data with the letter 'B'
     eval {
         my $tmp = $obj;
         decode('utf-8-strict',$tmp,Encode::FB_CROAK);
     } or return 'B';
 
+    # include data as-is
     return $obj;
 
 }
@@ -977,10 +1021,10 @@ sub new {
 sub parse {
     my ($self,$data) = @_;
 
-    $data =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
-
-    $self->{version} = $1;
     $self->{data} = $data;
+
+    $self->{data} =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
+    $self->{version} = $1;
 
     # Parse cross-reference table (and trailer)
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
@@ -1537,9 +1581,11 @@ sub parsed_metadata {
         _set_tag($pms, 'PDF2VERSION', $pdf->version );
 
         $pms->{pdfinfo2}->{md5}->{$md5} = 1;
-        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{FuzzyMD5}} = 1;
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy1}} = 1;
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy2}} = 1;
         _set_tag($pms, 'PDF2MD5', $md5);
-        _set_tag($pms, 'PDF2MD5FUZZY1', $info->{FuzzyMD5});
+        _set_tag($pms, 'PDF2MD5FUZZY1', $info->{MD5Fuzzy1});
+        _set_tag($pms, 'PDF2MD5FUZZY2', $info->{MD5Fuzzy2});
 
     }
 

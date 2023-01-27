@@ -196,6 +196,7 @@ The following tags can be defined in an C<add_header> line:
     _PDF2TITLE_       - Title of the PDF File, if available
     _PDF2MD5_         - MD5 checksum of PDF(s) - space seperated
     _PDF2MD5FUZZY1_   - Fuzzy1 MD5 checksum of PDF(s) - space seperated
+    _PDF2MD5FUZZY2_   - Fuzzy2 MD5 checksum of PDF(s) - space seperated
 
 Example C<add_header> lines:
 
@@ -205,6 +206,20 @@ Example C<add_header> lines:
     add_header all PDF-LinkInfo links=_PDF2LINKCOUNT_, ratios=_PDF2CLICKRATIO_
     add_header all PDF-Md5 md5=_PDF2MD5_, fuzzy1=_PDF2MD5FUZZY1_
 
+
+=head1 MD5 CHECKSUMS
+
+To view the MD5 checksums for a message you can run:
+
+    cat msg.eml | spamassassin -D -L |& grep PDF2MD5
+
+The Fuzzy 1 checksum is calculated using tags from every object that is traversed which is essentially pages,
+images, and the document trailer. You should expect a match if two PDF's were created by the same author/program
+and have the same structure with the same or slightly different content.
+
+The Fuzzy 2 checksum only includes the comment lines at the beginning of the document plus the first object. The
+Fuzzy 2 checksum is generally an indicator of what software created the PDF but the contents could be totally
+different.
 
 =head1 URI DETAILS
 
@@ -337,9 +352,11 @@ sub parsed_metadata {
         _set_tag($pms, 'PDF2VERSION', $pdf->version );
 
         $pms->{pdfinfo2}->{md5}->{$md5} = 1;
-        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{FuzzyMD5}} = 1;
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy1}} = 1;
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy2}} = 1;
         _set_tag($pms, 'PDF2MD5', $md5);
-        _set_tag($pms, 'PDF2MD5FUZZY1', $info->{FuzzyMD5});
+        _set_tag($pms, 'PDF2MD5FUZZY1', $info->{MD5Fuzzy1});
+        _set_tag($pms, 'PDF2MD5FUZZY2', $info->{MD5Fuzzy2});
 
     }
 

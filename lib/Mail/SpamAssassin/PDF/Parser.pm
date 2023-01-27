@@ -36,10 +36,10 @@ sub new {
 sub parse {
     my ($self,$data) = @_;
 
-    $data =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
-
-    $self->{version} = $1;
     $self->{data} = $data;
+
+    $self->{data} =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
+    $self->{version} = $1;
 
     # Parse cross-reference table (and trailer)
     $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";

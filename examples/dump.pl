@@ -57,10 +57,10 @@ if ( defined $opts{o} ) {
     }
 } elsif ( defined($opts{f}) ) {
     my $info = $context->get_info();
-    print $info->{FuzzyMD5}," $file\n";
+    print $info->{MD5Fuzzy1}," $file\n";
 } elsif ( defined($opts{F}) ) {
     my $info = $context->get_info();
-    print $info->{FuzzyMD5Data},"\n";
+    print $info->{MD5Fuzzy2}," $file\n";
 } else  {
     print Dumper($pdf->{trailer});
 }

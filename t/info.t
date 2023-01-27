@@ -26,7 +26,8 @@ my @tests = (
             'ImageRatio' => '2.95',
             'LinkCount'    => 0,
             'uris'         => {},
-            'FuzzyMD5'     => 'BDA32D707C66A329F1B37BDC238C0DE2',
+            'MD5Fuzzy1'     => 'BDA32D707C66A329F1B37BDC238C0DE2',
+            'MD5Fuzzy2'     => 'F46774C7543A737E0E9C84749FE5C128',
             'ClickArea' => 0,
             'ClickRatio' => '0.00',
         }
@@ -53,7 +54,8 @@ my @tests = (
             'CreationDate' => 'D:20200724162630-05\'00\'',
             'LinkCount'    => 0,
             'uris'         => {},
-            'FuzzyMD5'     => '332ED68EE285723FCE457839231B2FEF',
+            'MD5Fuzzy1'     => '332ED68EE285723FCE457839231B2FEF',
+            'MD5Fuzzy2'     => '018D84F8D04C075D5D65D33BA9B554D7',
             'ClickArea' => 0,
             'ClickRatio' => '0.00',
         }
@@ -78,7 +80,8 @@ my @tests = (
             'uris' => {
                 'https://bit.ly/3PVE5IZ' => 1
             },
-            'FuzzyMD5'     => 'B6E6F110F2EE80CDC083FDC496860210',
+            'MD5Fuzzy1'     => 'B6E6F110F2EE80CDC083FDC496860210',
+            'MD5Fuzzy2'     => '16B2275186DAF8F7C815C9990F35AA02',
             'ClickArea' => 347292,
             'ClickRatio' => '69.32',
         }
@@ -101,7 +104,8 @@ my @tests = (
             'Version' => '1.4',
             'ImageCount' => 1,
             'ColorImageCount' => 1,
-            'FuzzyMD5' => 'AC884B5E28A1E6CF784820C4BBF561F2',
+            'MD5Fuzzy1' => 'AC884B5E28A1E6CF784820C4BBF561F2',
+            'MD5Fuzzy2' => '6710236FFB511D3C75515BCCB896ADE9',
             'ModDate' => 'D:20230102151215+01\'00\'',
             'ClickRatio' => '35.00',
             'ClickArea' => 175357,
@@ -125,7 +129,8 @@ my @tests = (
                 'mailto:support@itarian.com' => 1,
                 'https://forum.itarian.com/' => 1
             },
-            'FuzzyMD5' => '0BDF548E3805B31A05E85B3B71E0B017',
+            'MD5Fuzzy1' => '0BDF548E3805B31A05E85B3B71E0B017',
+            'MD5Fuzzy2' => 'E760C82A449E199AADADDCCDF587DBC4',
             'ImageArea' => 11700,
             'Creator' => '',
             'Producer' => 'Qt 5.5.1',
@@ -152,7 +157,8 @@ my @tests = (
             'uris' => {
                 'https://s.id/1tzdg' => 1
             },
-            'FuzzyMD5'     => '481E37EC16FF667D3512C20E7184DC0A',
+            'MD5Fuzzy1'     => '481E37EC16FF667D3512C20E7184DC0A',
+            'MD5Fuzzy2'     => 'E44DD6F91A3112162A5B2781CD90FF6D',
             'ClickArea' => 166726,
             'ClickRatio' => '34.40',
         }
@@ -176,7 +182,8 @@ my @tests = (
             'uris' => {
                 'http://gkjdepok.org/docdir/SCANS_PP2849.zip' => 1
             },
-            'FuzzyMD5'     => 'F6483B538F996BF452681FBB5B153691',
+            'MD5Fuzzy1'     => 'F6483B538F996BF452681FBB5B153691',
+            'MD5Fuzzy2'     => 'D5B616162FDD93043F006EABFF6CEC0C',
             'ClickArea' => 501160,
             'ClickRatio' => '100.00',
         }
@@ -204,7 +211,8 @@ my @tests = (
                 'http://www.equipmentfinance.societegenerale.co.uk/' => 1,
                 'mailto:settlements@sgef.co.uk'                      => 1
             },
-            'FuzzyMD5'     => '506CC279ED3A27A3F84992DD9CDF7DD0',
+            'MD5Fuzzy1'     => '506CC279ED3A27A3F84992DD9CDF7DD0',
+            'MD5Fuzzy2'     => '365239E089D8EA8D4E3363FE997B89DD',
             'ClickArea' => 5792,
             'ClickRatio' => '1.16',
         }
@@ -231,7 +239,8 @@ my @tests = (
             'uris' => {
                 'https://digital-camscanner.onelink.me/P3GL/w1r4frhy' => 1
             },
-            'FuzzyMD5'     => '13CF979A8E09F71E6DBD53931A58B444',
+            'MD5Fuzzy1'     => '13CF979A8E09F71E6DBD53931A58B444',
+            'MD5Fuzzy2'     => '7FD24F84B2099FEFE94D8A2075DF0AD1',
             'ClickRatio' => '0.97',
             'ClickArea' => 4835,
         }
@@ -247,7 +256,8 @@ my @tests = (
             'Version' => '1.7',
             'ImageRatio' => 100,
             'Author' => 'risha',
-            'FuzzyMD5' => 'E98DBB88658A8B210BF5D862DD0DE36B',
+            'MD5Fuzzy1' => 'E98DBB88658A8B210BF5D862DD0DE36B',
+            'MD5Fuzzy2' => '7F0918AFB5B2468A6A1D0B24277AEB1D',
             'ModDate' => 'D:20221219182546+05\'30\'',
             'ClickArea' => 0,
             'Title' => 'paypal',
@@ -271,7 +281,8 @@ my @tests = (
             'ImageCount' => 1,
             'ColorImageCount' => 1,
             'ClickRatio' => '0.00',
-            'FuzzyMD5' => '187108336A1C58FAC57B1825C90B2FDB',
+            'MD5Fuzzy1' => '187108336A1C58FAC57B1825C90B2FDB',
+            'MD5Fuzzy2' => 'BEF020293FA706764379B50430C21BD2',
             'PageCount' => 1,
             'Version' => '1.7',
             'uris' => {},
@@ -298,7 +309,8 @@ my @tests = (
             'Producer' => 'Softplicity',
             'Author' => 'Softplicity',
             'Encrypted' => 0,
-            'FuzzyMD5' => '72BD561D1B50B2850FEB4FB883D76E6F',
+            'MD5Fuzzy1' => '72BD561D1B50B2850FEB4FB883D76E6F',
+            'MD5Fuzzy2' => '410087A0E28A3963ED7E810700376416',
             'uris' => {
                 'https://clck.ru/33KW7h' => 1
             },
@@ -314,7 +326,8 @@ my @tests = (
             'Version' => '1.6',
             'uris' => {},
             'Protected' => 1,
-            'FuzzyMD5' => 'B04B5F350BCCF114F253147F71007C84',
+            'MD5Fuzzy1' => 'B04B5F350BCCF114F253147F71007C84',
+            'MD5Fuzzy2' => '7F24742E76DEB241E26987C1D100268C',
             'ImageCount' => 0,
             'ColorImageCount' => 0,
             'Encrypted' => 1,
@@ -332,7 +345,8 @@ my @tests = (
         expected => {
             'CreationDate' => 'D:20230122031715',
             'ClickRatio' => '0.00',
-            'FuzzyMD5' => '73384CF7BA37649DA549F8947AAF4E50',
+            'MD5Fuzzy1' => '73384CF7BA37649DA549F8947AAF4E50',
+            'MD5Fuzzy2' => '94BC3C8D574B716A31980CE0D2C658E7',
             'ImageCount' => 1,
             'PageArea' => 473169,
             'Encrypted' => 0,
