@@ -22,7 +22,7 @@ getopts('g:o:s:',\%opts);
 my ($file) = @ARGV;
 pod2usage() unless defined $file;
 
-open my $fh, '<', $file or die;
+open my $fh, '<', $file or die "$!";
 local $/ = undef;
 my $data = <$fh>;
 close $fh;

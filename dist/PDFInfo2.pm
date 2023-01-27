@@ -1577,7 +1577,7 @@ sub parsed_metadata {
         _set_tag($pms, 'PDF2CREATOR', $info->{Creator});
         _set_tag($pms, 'PDF2TITLE', $info->{Title});
         _set_tag($pms, 'PDF2IMAGERATIO', $info->{ImageRatio});
-        _set_tag($pms, 'PDF2CLICKRATIO', $info->{ImageRatio});
+        _set_tag($pms, 'PDF2CLICKRATIO', $info->{ClickRatio});
         _set_tag($pms, 'PDF2VERSION', $pdf->version );
 
         $pms->{pdfinfo2}->{md5}->{$md5} = 1;
