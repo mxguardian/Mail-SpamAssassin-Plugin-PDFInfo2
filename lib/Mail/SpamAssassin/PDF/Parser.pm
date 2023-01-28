@@ -49,7 +49,7 @@ sub parse {
     $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
 
     # Parse info object
-    $self->{trailer}->{'/Info'} = $self->_get_obj($self->{trailer}->{'/Info'});
+    $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
     $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
 
     # Parse catalog
@@ -179,6 +179,18 @@ sub _parse_encrypt {
     }
     $self->{is_encrypted} = 1;
 
+}
+
+sub _parse_info {
+    my ($self,$info) = @_;
+    $info = $self->_dereference($info);
+    return unless defined($info);
+
+    foreach (keys %{$info}) {
+        $info->{$_} = $self->_dereference($info->{$_});
+    }
+
+    return $info;
 }
 
 sub _parse_pages {

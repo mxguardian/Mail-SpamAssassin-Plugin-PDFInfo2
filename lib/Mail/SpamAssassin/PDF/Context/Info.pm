@@ -131,7 +131,7 @@ sub parse_end {
 
     $self->{info}->{Version} = $parser->{version};
     $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
-    # $self->{info}->{FuzzyMD5Data} = $self->{fuzzy_md5_data};
+    # print $self->{fuzzy_md5_data};
 
 
     # Compute MD5 Fuzzy2
