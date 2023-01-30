@@ -607,7 +607,7 @@ sub draw_image {
 }
 
 sub uri {
-    my ($self,$location,$rect) = @_;
+    my ($self,$location,$rect,$page) = @_;
 
     my $fuzzy_data = '/URI';
     $self->{fuzzy_md5}->add( $fuzzy_data );
@@ -617,7 +617,15 @@ sub uri {
     $self->{info}->{LinkCount}++;
 
     if ( defined($rect) ) {
-        $self->{info}->{ClickArea} += abs(($rect->[2]-$rect->[0]) * ($rect->[3]-$rect->[1]));
+        my ($x1,$y1,$x2,$y2) = @{$rect};
+        if ( defined($page->{'/MediaBox'}) ) {
+            # clip rectangle to media box
+            $x1 = _max($page->{'/MediaBox'}->[0],_min($page->{'/MediaBox'}->[2],$x1));
+            $x2 = _max($page->{'/MediaBox'}->[0],_min($page->{'/MediaBox'}->[2],$x2));
+            $y1 = _max($page->{'/MediaBox'}->[1],_min($page->{'/MediaBox'}->[3],$y1));
+            $y2 = _max($page->{'/MediaBox'}->[1],_min($page->{'/MediaBox'}->[3],$y2));
+        }
+        $self->{info}->{ClickArea} += abs(($x2-$x1) * ($y2-$y1));
     }
 }
 
@@ -723,6 +731,11 @@ sub _round {
 sub _min {
     my ($x,$y) = @_;
     $x < $y ? $x : $y;
+}
+
+sub _max {
+    my ($x,$y) = @_;
+    $x > $y ? $x : $y;
 }
 
 1;
@@ -1200,7 +1213,7 @@ sub _parse_pages {
         $process_page = $self->{context}->page_begin($node) if $self->{context}->can('page_begin');
 
         if ( $process_page ) {
-            $self->_parse_annotations($node->{'/Annots'}) if (defined($node->{'/Annots'}));
+            $self->_parse_annotations($node->{'/Annots'},$node) if (defined($node->{'/Annots'}));
             $node->{'/Resources'} = $self->_parse_resources($node->{'/Resources'}) if (defined($node->{'/Resources'}));
             $self->_parse_contents($node->{'/Contents'},$node) if (defined($node->{'/Contents'}));
 
@@ -1217,28 +1230,28 @@ sub _parse_pages {
 }
 
 sub _parse_annotations {
-    my ($self,$annots) = @_;
+    my ($self,$annots,$page) = @_;
     $annots = $self->_dereference($annots);
     return unless defined($annots);
 
     for my $ref (@$annots) {
         my $annot = $self->_get_obj($ref);
         if ( defined($annot->{'/Subtype'}) && $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'}) ) {
-            $self->_parse_action($annot->{'/A'},$annot->{'/Rect'});
+            $self->_parse_action($annot->{'/A'},$annot->{'/Rect'},$page);
         }
     }
 
 }
 
 sub _parse_action {
-    my ($self,$action,$rect) = @_;
+    my ($self,$action,$rect,$page) = @_;
     $action = $self->_dereference($action);
     return unless defined($action);
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
         if ( $location =~ /^\w+:/ ) {
-            $self->{context}->uri($location,$rect) if $self->{context}->can('uri');
+            $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
         }
     }
 
@@ -1280,10 +1293,10 @@ sub _parse_xobject {
 }
 
 sub _parse_contents {
-    my ($self,$contents,$page) = @_;
+    my ($self,$contents,$page,$resources) = @_;
     return if $self->is_protected();
 
-    $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
+    $resources = $self->_dereference($resources) || $page->{'/Resources'};
 
     #@type Mail::SpamAssassin::PDF::Context
     my $context = $self->{context};
@@ -1296,14 +1309,15 @@ sub _parse_contents {
         Q  => sub { $context->restore_state() },
         cm => sub { $context->concat_matrix(@_) },
         Do => sub {
-            my $xobj = $page->{'/Resources'}->{'/XObject'}->{$_[0]};
+            my $xobj = $resources->{'/XObject'}->{$_[0]};
+            die "XObject $_[0] not found: " unless (defined($xobj));
             $xobj->{_name} = $_[0];
             if ( $xobj->{'/Subtype'} eq '/Image' ) {
                 $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
             } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
                 $context->save_state();
                 $context->concat_matrix(@{$xobj->{'/Matrix'}});
-                $self->_parse_contents($xobj, $page);
+                $self->_parse_contents($xobj, $page, $xobj->{'/Resources'});
                 $context->restore_state();
             }
         }
@@ -1337,7 +1351,7 @@ sub _parse_contents {
 
     if ( $context->isa('Mail::SpamAssassin::PDF::Context::Text') ) {
         $dispatch{Tf} = sub {
-            my $font = $self->_dereference($page->{'/Resources'}->{'/Font'}->{$_[0]});
+            my $font = $self->_dereference($resources->{'/Font'}->{$_[0]});
             my $cmap = Mail::SpamAssassin::PDF::Filter::CharMap->new();
             if (defined($font->{'/ToUnicode'})) {
                 $cmap->parse_stream($self->_get_stream_data($font->{'/ToUnicode'}));
@@ -1351,6 +1365,7 @@ sub _parse_contents {
     }
 
     # Process commands
+    $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
     for my $obj ( @$contents ) {
         my $stream = $self->_get_stream_data($obj);
         while () {

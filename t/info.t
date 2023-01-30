@@ -362,6 +362,31 @@ my @tests = (
             'ColorImageCount' => 0,
             'ImageArea' => 473169        }
     },
+    {
+        filename => 't/ham/Form.pdf',
+        expected => {
+            'PageArea'        => 501157,
+            'ClickArea'       => 0,
+            'CreationDate'    => 'D:20220929143131+03\'00\'',
+            'Encrypted'       => 0,
+            'Producer'        => 'Adobe PDF Library 16.0.7',
+            'LinkCount'       => 0,
+            'ClickRatio'      => '0.00',
+            'ModDate'         => 'D:20220929143132+03\'00\'',
+            'MD5Fuzzy2'       => 'A5082B56AE4451A7781239AE1C2582AF',
+            'ImageCount'      => 6,
+            'MD5Fuzzy1'       => '6CF53975E44B6DC6FE4D44CFFC781FE9',
+            'ImageRatio'      => '22.47',
+            'Version'         => '1.4',
+            'ColorImageCount' => 6,
+            'PageCount'       => 1,
+            'Creator'         => 'Adobe InDesign 17.3 (Macintosh)',
+            'ImageArea'       => 112586,
+            'Trapped'         => '/False',
+            'Protected'       => 0,
+            'uris'            => {}
+        }
+    },
 );
 
 plan tests => scalar(@tests);

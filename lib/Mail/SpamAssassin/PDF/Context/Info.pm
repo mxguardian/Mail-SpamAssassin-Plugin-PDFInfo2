@@ -89,7 +89,7 @@ sub draw_image {
 }
 
 sub uri {
-    my ($self,$location,$rect) = @_;
+    my ($self,$location,$rect,$page) = @_;
 
     my $fuzzy_data = '/URI';
     $self->{fuzzy_md5}->add( $fuzzy_data );
@@ -99,7 +99,15 @@ sub uri {
     $self->{info}->{LinkCount}++;
 
     if ( defined($rect) ) {
-        $self->{info}->{ClickArea} += abs(($rect->[2]-$rect->[0]) * ($rect->[3]-$rect->[1]));
+        my ($x1,$y1,$x2,$y2) = @{$rect};
+        if ( defined($page->{'/MediaBox'}) ) {
+            # clip rectangle to media box
+            $x1 = _max($page->{'/MediaBox'}->[0],_min($page->{'/MediaBox'}->[2],$x1));
+            $x2 = _max($page->{'/MediaBox'}->[0],_min($page->{'/MediaBox'}->[2],$x2));
+            $y1 = _max($page->{'/MediaBox'}->[1],_min($page->{'/MediaBox'}->[3],$y1));
+            $y2 = _max($page->{'/MediaBox'}->[1],_min($page->{'/MediaBox'}->[3],$y2));
+        }
+        $self->{info}->{ClickArea} += abs(($x2-$x1) * ($y2-$y1));
     }
 }
 
@@ -205,6 +213,11 @@ sub _round {
 sub _min {
     my ($x,$y) = @_;
     $x < $y ? $x : $y;
+}
+
+sub _max {
+    my ($x,$y) = @_;
+    $x > $y ? $x : $y;
 }
 
 1;
