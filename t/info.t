@@ -28,6 +28,7 @@ my @tests = (
             'uris'         => {},
             'MD5Fuzzy1'     => 'BDA32D707C66A329F1B37BDC238C0DE2',
             'MD5Fuzzy2'     => 'F46774C7543A737E0E9C84749FE5C128',
+            'MD5'           => '246273E865CEC832E2AE2FCFCC200F8B',
             'ClickArea' => 0,
             'ClickRatio' => '0.00',
         }
@@ -56,6 +57,7 @@ my @tests = (
             'uris'         => {},
             'MD5Fuzzy1'     => '332ED68EE285723FCE457839231B2FEF',
             'MD5Fuzzy2'     => '018D84F8D04C075D5D65D33BA9B554D7',
+            'MD5'           => 'A38AC5E2012AF7F93024567250BE0AE9',
             'ClickArea' => 0,
             'ClickRatio' => '0.00',
         }
@@ -82,6 +84,7 @@ my @tests = (
             },
             'MD5Fuzzy1'     => 'B6E6F110F2EE80CDC083FDC496860210',
             'MD5Fuzzy2'     => '16B2275186DAF8F7C815C9990F35AA02',
+            'MD5'           => '1D91627518DAA81A72A451056F8F653A',
             'ClickArea' => 347292,
             'ClickRatio' => '69.32',
         }
@@ -106,6 +109,7 @@ my @tests = (
             'ColorImageCount' => 1,
             'MD5Fuzzy1' => 'AC884B5E28A1E6CF784820C4BBF561F2',
             'MD5Fuzzy2' => '6710236FFB511D3C75515BCCB896ADE9',
+            'MD5'           => 'B88C417A783E1EFEFC27D3B8065746EA',
             'ModDate' => 'D:20230102151215+01\'00\'',
             'ClickRatio' => '35.00',
             'ClickArea' => 175357,
@@ -131,6 +135,7 @@ my @tests = (
             },
             'MD5Fuzzy1' => '0BDF548E3805B31A05E85B3B71E0B017',
             'MD5Fuzzy2' => 'E760C82A449E199AADADDCCDF587DBC4',
+            'MD5'           => '5DEEC7325AD7F1147280B675F0F2ECC1',
             'ImageArea' => 11700,
             'Creator' => '',
             'Producer' => 'Qt 5.5.1',
@@ -159,6 +164,7 @@ my @tests = (
             },
             'MD5Fuzzy1'     => '481E37EC16FF667D3512C20E7184DC0A',
             'MD5Fuzzy2'     => 'E44DD6F91A3112162A5B2781CD90FF6D',
+            'MD5'           => 'B5DEE9C79BAC4B2990A54FF8C31E8FCD',
             'ClickArea' => 166726,
             'ClickRatio' => '34.40',
         }
@@ -184,6 +190,7 @@ my @tests = (
             },
             'MD5Fuzzy1'     => 'F6483B538F996BF452681FBB5B153691',
             'MD5Fuzzy2'     => 'D5B616162FDD93043F006EABFF6CEC0C',
+            'MD5'           => 'DC4851593138C810BA5FD93C47523D51',
             'ClickArea' => 501160,
             'ClickRatio' => '100.00',
         }
@@ -213,6 +220,7 @@ my @tests = (
             },
             'MD5Fuzzy1'     => '506CC279ED3A27A3F84992DD9CDF7DD0',
             'MD5Fuzzy2'     => '365239E089D8EA8D4E3363FE997B89DD',
+            'MD5'           => 'FF705E05533CF8C98D1623D213FCB4FE',
             'ClickArea' => 5792,
             'ClickRatio' => '1.16',
         }
@@ -241,6 +249,7 @@ my @tests = (
             },
             'MD5Fuzzy1'     => '13CF979A8E09F71E6DBD53931A58B444',
             'MD5Fuzzy2'     => '7FD24F84B2099FEFE94D8A2075DF0AD1',
+            'MD5'           => 'A206B0ACDE4E212E8A1F699A9E87DD36',
             'ClickRatio' => '0.97',
             'ClickArea' => 4835,
         }
@@ -258,6 +267,7 @@ my @tests = (
             'Author' => 'risha',
             'MD5Fuzzy1' => 'E98DBB88658A8B210BF5D862DD0DE36B',
             'MD5Fuzzy2' => '7F0918AFB5B2468A6A1D0B24277AEB1D',
+            'MD5'           => 'B3BF38C48788A8AA6E4F37190852F40E',
             'ModDate' => 'D:20221219182546+05\'30\'',
             'ClickArea' => 0,
             'Title' => 'paypal',
@@ -283,6 +293,7 @@ my @tests = (
             'ClickRatio' => '0.00',
             'MD5Fuzzy1' => '187108336A1C58FAC57B1825C90B2FDB',
             'MD5Fuzzy2' => 'BEF020293FA706764379B50430C21BD2',
+            'MD5'           => '9BFC3C4764E15629859C991C262529FA',
             'PageCount' => 1,
             'Version' => '1.7',
             'uris' => {},
@@ -311,6 +322,7 @@ my @tests = (
             'Encrypted' => 0,
             'MD5Fuzzy1' => '72BD561D1B50B2850FEB4FB883D76E6F',
             'MD5Fuzzy2' => '410087A0E28A3963ED7E810700376416',
+            'MD5'           => '67A83A54661B5714A7D5D7EA1DAFD0FF',
             'uris' => {
                 'https://clck.ru/33KW7h' => 1
             },
@@ -328,6 +340,7 @@ my @tests = (
             'Protected' => 1,
             'MD5Fuzzy1' => 'B04B5F350BCCF114F253147F71007C84',
             'MD5Fuzzy2' => '7F24742E76DEB241E26987C1D100268C',
+            'MD5'           => '30694E15C217049D641BA7E2FAE57BD6',
             'ImageCount' => 0,
             'ColorImageCount' => 0,
             'Encrypted' => 1,
@@ -347,6 +360,7 @@ my @tests = (
             'ClickRatio' => '0.00',
             'MD5Fuzzy1' => '73384CF7BA37649DA549F8947AAF4E50',
             'MD5Fuzzy2' => '94BC3C8D574B716A31980CE0D2C658E7',
+            'MD5'           => 'ECC774C73DBB4A3D629BCD83893BF105',
             'ImageCount' => 1,
             'PageArea' => 473169,
             'Encrypted' => 0,
@@ -374,6 +388,7 @@ my @tests = (
             'ClickRatio'      => '0.00',
             'ModDate'         => 'D:20220929143132+03\'00\'',
             'MD5Fuzzy2'       => 'A5082B56AE4451A7781239AE1C2582AF',
+            'MD5'           => '2EA71DA1458593ED757FE436D6A28C86',
             'ImageCount'      => 6,
             'MD5Fuzzy1'       => '6CF53975E44B6DC6FE4D44CFFC781FE9',
             'ImageRatio'      => '22.47',

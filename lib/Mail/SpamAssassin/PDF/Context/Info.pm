@@ -2,7 +2,7 @@ package Mail::SpamAssassin::PDF::Context::Info;
 use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Context;
-use Digest::MD5;
+use Digest::MD5 qw(md5_hex);
 use Encode qw(decode);
 use Data::Dumper;
 
@@ -138,6 +138,7 @@ sub parse_end {
     $self->{info}->{Protected} = $parser->is_protected();
 
     $self->{info}->{Version} = $parser->{version};
+    $self->{info}->{MD5} = uc(md5_hex($parser->{data}));
     $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
     # print $self->{fuzzy_md5_data};
 
