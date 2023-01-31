@@ -520,7 +520,7 @@ sub transform {
 package Mail::SpamAssassin::PDF::Context::Info;
 use strict;
 use warnings FATAL => 'all';
-use Digest::MD5;
+use Digest::MD5 qw(md5_hex);
 use Encode qw(decode);
 use Data::Dumper;
 
@@ -656,6 +656,7 @@ sub parse_end {
     $self->{info}->{Protected} = $parser->is_protected();
 
     $self->{info}->{Version} = $parser->{version};
+    $self->{info}->{MD5} = uc(md5_hex($parser->{data}));
     $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
     # print $self->{fuzzy_md5_data};
 
@@ -1532,6 +1533,42 @@ sub new {
     return $self;
 }
 
+sub post_message_parse {
+    my ($self, $opts) = @_;
+
+    my $msg = $opts->{'message'};
+
+    $msg->{pdfparts} = [];
+    foreach my $p ($msg->find_parts(qr/./,1)) {
+        my $type = $p->{type} || '';
+        my $name = $p->{name} || '';
+
+        next unless $type =~ qr/\/pdf$/ or $name =~ /\.pdf$/i;
+
+        dbg("pdfinfo2: found part, type=$type file=$name");
+        push(@{$msg->{pdfparts}},$p);
+
+        # Get raw PDF data
+        my $data = $p->decode();
+        next unless $data;
+
+        # Parse PDF
+        my $pdf = Mail::SpamAssassin::PDF::Parser->new();
+        my $info = eval {
+            $pdf->parse($data);
+            $pdf->{context}->get_info();
+        };
+        if ( !defined($info) ) {
+            dbg("pdfinfo2: Error parsing pdf: $@");
+            next;
+        }
+
+        $p->{pdfinfo2} = $info;
+
+    }
+
+}
+
 sub parsed_metadata {
     my ($self, $opts) = @_;
 
@@ -1548,33 +1585,14 @@ sub parsed_metadata {
         WordCount       => 0
     };
 
-    foreach my $p ($pms->{msg}->find_parts(qr/./,1)) {
-        my $type = $p->{type} || '';
+    foreach my $p (@{ $pms->{msg}->{pdfparts} }) {
+
         my $name = $p->{name} || '';
-
-        next unless $type =~ qr/\/pdf$/ or $name =~ /\.pdf$/i;
-
-        dbg("pdfinfo2: found part, type=$type file=$name");
-
         _set_tag($pms, 'PDF2NAME', $name);
         $pms->{pdfinfo2}->{totals}->{FileCount}++;
 
-        # Get raw PDF data
-        my $data = $p->decode();
-        next unless $data;
-
-        my $md5 = uc(md5_hex($data));
-
-        # Parse PDF
-        my $pdf = Mail::SpamAssassin::PDF::Parser->new();
-        my $info = eval {
-            $pdf->parse($data);
-            $pdf->{context}->get_info();
-        };
-        if ( !defined($info) ) {
-            dbg("pdfinfo2: Error parsing pdf: $@");
-            next;
-        }
+        my $info = $p->{pdfinfo2};
+        next unless defined $info;
 
         # Add URI's
         foreach my $location ( keys %{ $info->{uris} }) {
@@ -1586,7 +1604,6 @@ sub parsed_metadata {
         my $text = $p->rendered() || '';
         $info->{WordCount} = scalar(split(/\s+/, $text));
 
-
         $pms->{pdfinfo2}->{files}->{$name} = $info;
         $pms->{pdfinfo2}->{totals}->{ImageCount} += $info->{ImageCount};
         $pms->{pdfinfo2}->{totals}->{ColorImageCount} += $info->{ColorImageCount};
@@ -1597,7 +1614,6 @@ sub parsed_metadata {
         $pms->{pdfinfo2}->{totals}->{PageArea} += $info->{PageArea};
         $pms->{pdfinfo2}->{totals}->{Encrypted} += $info->{Encrypted};
         $pms->{pdfinfo2}->{totals}->{Protected} += $info->{Protected};
-        $pms->{pdfinfo2}->{md5}->{$md5} = 1;
 
         _set_tag($pms, 'PDF2PRODUCER', $info->{Producer});
         _set_tag($pms, 'PDF2AUTHOR', $info->{Author});
@@ -1605,12 +1621,12 @@ sub parsed_metadata {
         _set_tag($pms, 'PDF2TITLE', $info->{Title});
         _set_tag($pms, 'PDF2IMAGERATIO', $info->{ImageRatio});
         _set_tag($pms, 'PDF2CLICKRATIO', $info->{ClickRatio});
-        _set_tag($pms, 'PDF2VERSION', $pdf->version );
+        _set_tag($pms, 'PDF2VERSION', $info->{Version} );
 
-        $pms->{pdfinfo2}->{md5}->{$md5} = 1;
+        $pms->{pdfinfo2}->{md5}->{$info->{MD5}} = 1;
         $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy1}} = 1;
         $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy2}} = 1;
-        _set_tag($pms, 'PDF2MD5', $md5);
+        _set_tag($pms, 'PDF2MD5', $info->{MD5});
         _set_tag($pms, 'PDF2MD5FUZZY1', $info->{MD5Fuzzy1});
         _set_tag($pms, 'PDF2MD5FUZZY2', $info->{MD5Fuzzy2});
 
