@@ -307,7 +307,7 @@ sub get_string {
 sub get_hex_string {
     my ($self,$ptr) = @_;
 
-    $$ptr =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string at offset ".pos($$ptr);
+    $$ptr =~ /\G\s*<([0-9A-Fa-f\s]*?)>/gc or die "Invalid hex string at offset ".pos($$ptr);
     my $hex = $1;
     $hex =~ s/\s+//gxms;
     $hex .= '0' if (length($hex) % 2 == 1);
@@ -1452,6 +1452,9 @@ sub _get_stream_data {
     my $offset = $stream_obj->{_stream_offset};
     my $length = $self->_dereference($stream_obj->{'/Length'});
     my $filter = $stream_obj->{'/Filter'} || '';
+    my @filters = !defined($stream_obj->{'/Filter'}) ? ()
+        : ref($stream_obj->{'/Filter'}) eq 'ARRAY' ? @{$stream_obj->{'/Filter'}}
+        : ( $stream_obj->{'/Filter'} );
 
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
@@ -1461,16 +1464,14 @@ sub _get_stream_data {
         $stream_data = $self->{core}->{crypt}->decrypt($stream_data);
     }
 
-    if ( $filter eq '/FlateDecode' ) {
-        my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
-        $self->{stream_cache}->{$offset} = $f->decode(
-            $stream_data
-        );
-    } else {
-        $self->{stream_cache}->{$offset} = $stream_data;
+    foreach my $filter (@filters) {
+        if ( $filter eq '/FlateDecode' ) {
+            my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+            $stream_data = $f->decode($stream_data);
+        }
     }
 
-    return $self->{stream_cache}->{$offset};
+    return $self->{stream_cache}->{$offset} = $stream_data;
 
 }
 

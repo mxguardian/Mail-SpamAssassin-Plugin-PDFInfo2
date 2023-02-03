@@ -453,6 +453,9 @@ sub _get_stream_data {
     my $offset = $stream_obj->{_stream_offset};
     my $length = $self->_dereference($stream_obj->{'/Length'});
     my $filter = $stream_obj->{'/Filter'} || '';
+    my @filters = !defined($stream_obj->{'/Filter'}) ? ()
+        : ref($stream_obj->{'/Filter'}) eq 'ARRAY' ? @{$stream_obj->{'/Filter'}}
+        : ( $stream_obj->{'/Filter'} );
 
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
@@ -462,16 +465,14 @@ sub _get_stream_data {
         $stream_data = $self->{core}->{crypt}->decrypt($stream_data);
     }
 
-    if ( $filter eq '/FlateDecode' ) {
-        my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
-        $self->{stream_cache}->{$offset} = $f->decode(
-            $stream_data
-        );
-    } else {
-        $self->{stream_cache}->{$offset} = $stream_data;
+    foreach my $filter (@filters) {
+        if ( $filter eq '/FlateDecode' ) {
+            my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+            $stream_data = $f->decode($stream_data);
+        }
     }
 
-    return $self->{stream_cache}->{$offset};
+    return $self->{stream_cache}->{$offset} = $stream_data;
 
 }
 

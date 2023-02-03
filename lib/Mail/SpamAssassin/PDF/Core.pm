@@ -74,7 +74,7 @@ sub get_string {
 sub get_hex_string {
     my ($self,$ptr) = @_;
 
-    $$ptr =~ /\G\s*<([0-9A-Fa-f]*?)>/g or die "Invalid hex string at offset ".pos($$ptr);
+    $$ptr =~ /\G\s*<([0-9A-Fa-f\s]*?)>/gc or die "Invalid hex string at offset ".pos($$ptr);
     my $hex = $1;
     $hex =~ s/\s+//gxms;
     $hex .= '0' if (length($hex) % 2 == 1);
