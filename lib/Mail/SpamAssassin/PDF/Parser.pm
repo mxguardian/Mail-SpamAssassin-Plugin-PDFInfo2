@@ -318,7 +318,7 @@ sub _parse_contents {
                 $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
             } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
                 $context->save_state();
-                $context->concat_matrix(@{$xobj->{'/Matrix'}});
+                $context->concat_matrix(@{$xobj->{'/Matrix'}}) if defined($xobj->{'/Matrix'});
                 $self->_parse_contents($xobj, $page, $xobj->{'/Resources'});
                 $context->restore_state();
             }
