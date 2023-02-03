@@ -272,6 +272,7 @@ sub new {
 
     # lower priority for add_uri_detail_list to work
     $self->register_method_priority ("parsed_metadata", -1);
+    $self->register_method_priority('post_message_parse', -1);
 
     return $self;
 }
