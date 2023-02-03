@@ -17,23 +17,30 @@ use Pod::Usage;
 =cut
 
 my %opts;
-getopts('g:o:s:',\%opts);
+getopts('f:',\%opts);
+my $field = $opts{'f'};
 
-my ($file) = @ARGV;
-pod2usage() unless defined $file;
+pod2usage() unless scalar(@ARGV);
 
-open my $fh, '<', $file or die "$!";
-local $/ = undef;
-my $data = <$fh>;
-close $fh;
+while (my $file = shift) {
+    open my $fh, '<', $file or die "$!";
+    local $/ = undef;
+    my $data = <$fh>;
+    close $fh;
 
-my $context = Mail::SpamAssassin::PDF::Context::Info->new();
+    my $context = Mail::SpamAssassin::PDF::Context::Info->new();
 
-my $pdf = Mail::SpamAssassin::PDF::Parser->new(
-    context         => $context
-);
+    my $pdf = Mail::SpamAssassin::PDF::Parser->new(
+        context         => $context
+    );
 
-$pdf->parse($data);
-my $info = $pdf->{context}->get_info;
+    $pdf->parse($data);
+    my $info = $pdf->{context}->get_info;
 
-print Dumper($info);
+    if ( defined($field) ) {
+        printf("%s: %s\n",$info->{$field} || '',$file);
+    } else {
+        print Dumper($info);
+    }
+
+}
