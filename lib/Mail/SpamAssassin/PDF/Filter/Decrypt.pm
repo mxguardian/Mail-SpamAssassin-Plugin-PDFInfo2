@@ -77,16 +77,34 @@ sub decrypt {
 #
 sub _check_user_password {
     my ($self,$pass) = @_;
+    my ($key,$hash);
 
     # step 1  Perform all but the last step of Algorithm 3.4 (Revision 2) or Algorithm 3.5 (Revision 3) using the supplied password string.
-    if ( $self->{R} >= 3 ) {
+    if ( $self->{R} == 2 ) {
+
+        # step 1 Create an encryption key based on the user password string, as described in Algorithm 3.2
+        $key = $self->_generate_key($pass);
+
+        # step 2 Encrypt the 32-byte padding string using an RC4 encryption function
+        $hash = Crypt::RC4::RC4($key,$padding);
+
+        # If the result of step 1 is equal to the value of the encryption dictionary’s U entry
+        # (comparing on the first 16 bytes in the case of Revision 3), the password supplied
+        # is the correct user password.
+        if ( $hash eq $self->{U} ) {
+            # Password is valid. Save key for later
+            $self->{code} = $key;
+            return 1;
+        }
+
+    } elsif ( $self->{R} >= 3 ) {
 
         #
         # Algorithm 3.5 Computing the encryption dictionary’s U (user password) value (Revision 3)
         #
 
         # step 1 Create an encryption key based on the user password string, as described in Algorithm 3.2
-        my $key = $self->_generate_key($pass);
+        $key = $self->_generate_key($pass);
 
         # step 2 Initialize the MD5 hash function and pass the 32-byte padding string as input to this function
         my $md5 = Digest::MD5->new();
@@ -95,7 +113,7 @@ sub _check_user_password {
         # step 3 Pass the first element of the file’s file identifier array to the hash function
         # and finish the hash.
         $md5->add($self->{ID});
-        my $hash = $md5->digest();
+        $hash = $md5->digest();
 
         # step 4  Encrypt the 16-byte result of the hash, using an RC4 encryption function with the
         # encryption key from step 1

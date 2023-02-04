@@ -284,7 +284,7 @@ sub _parse_xobject {
 
     for my $name (keys %$xobject) {
         my $ref = $xobject->{$name};
-        my $obj = $xobject->{$name} = $self->_get_obj($ref);
+        my $obj = $xobject->{$name} = $self->_dereference($ref);
         if ( $obj->{'/Subtype'} eq '/Image' ) {
             $obj->{'/ColorSpace'} = $self->_dereference($obj->{'/ColorSpace'});
         } elsif ( $obj->{'/Subtype'} eq '/Form' ) {
@@ -370,6 +370,7 @@ sub _parse_contents {
     $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
     for my $obj ( @$contents ) {
         my $stream = $self->_get_stream_data($obj);
+        # print "$stream\n\n";
         while () {
             my ($token,$type) = $core->get_primitive(\$stream);
             last unless defined($token);
@@ -377,6 +378,7 @@ sub _parse_contents {
                 push(@params,$token);
                 next;
             }
+            # print "$token\n";
             if ( defined($dispatch{$token}) ) {
                 $dispatch{$token}->(@params);
             }
@@ -392,24 +394,31 @@ sub _get_obj {
     # return undef for non-existent objects
     return undef unless defined($ref) && defined($self->{xref}->{$ref});
 
-    # return cached object if possible
-    return $self->{object_cache}->{$ref} if defined($self->{object_cache}->{$ref});
-
-    if (defined($self->{core}->{crypt})) {
+    if ( !defined($self->{object_cache}->{$ref}) ) {
         my ($objnum,$gennum) = $ref =~ /^(\d+) (\d+) R$/;
-        $self->{core}->{crypt}->set_current_object($objnum, $gennum);
+        if (defined($self->{core}->{crypt})) {
+            $self->{core}->{crypt}->set_current_object($objnum, $gennum);
+        }
+
+        my $obj;
+        if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
+            my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
+            $obj = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
+        } else {
+            pos($self->{data}) = $self->{xref}->{$ref};
+            $self->{data} =~ /\G\s*\d+ \d+ obj\s*/g or die "object $ref not found";
+            eval {
+                $obj = $self->{core}->get_primitive(\$self->{data});
+            } or die "Error getting object $ref: $@";
+        }
+        if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
+            # stream object. Store object number for decryption later
+            $obj->{_objnum} = $objnum;
+            $obj->{_gennum} = $gennum;
+        }
+        $self->{object_cache}->{$ref} = $obj;
     }
 
-    if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
-        my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
-        $self->{object_cache}->{$ref} = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
-    } else {
-        pos($self->{data}) = $self->{xref}->{$ref};
-        $self->{data} =~ /\G\s*\d+ \d+ obj\s*/g or die "object $ref not found";
-        eval {
-            $self->{object_cache}->{$ref} = $self->{core}->get_primitive(\$self->{data});
-        } or die "Error getting object $ref: $@";
-    }
     return $self->{object_cache}->{$ref};
 }
 
@@ -452,7 +461,6 @@ sub _get_stream_data {
 
     my $offset = $stream_obj->{_stream_offset};
     my $length = $self->_dereference($stream_obj->{'/Length'});
-    my $filter = $stream_obj->{'/Filter'} || '';
     my @filters = !defined($stream_obj->{'/Filter'}) ? ()
         : ref($stream_obj->{'/Filter'}) eq 'ARRAY' ? @{$stream_obj->{'/Filter'}}
         : ( $stream_obj->{'/Filter'} );
@@ -462,6 +470,7 @@ sub _get_stream_data {
 
     my $stream_data = substr($self->{data},$offset,$length);
     if (defined($self->{core}->{crypt})) {
+        $self->{core}->{crypt}->set_current_object($stream_obj->{_objnum}, $stream_obj->{_gennum});
         $stream_data = $self->{core}->{crypt}->decrypt($stream_data);
     }
 
@@ -469,6 +478,8 @@ sub _get_stream_data {
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
             $stream_data = $f->decode($stream_data);
+        } else {
+            die "Filter $filter not implemented";
         }
     }
 
