@@ -10,9 +10,12 @@ use Pod::Usage;
 
 =head1 SYNOPSIS
 
- info.pl <PDF_FILE>
+ info.pl [OPTIONS] <PDF_FILE>
 
  Dumps info about a PDF file
+
+ Options
+   -f   <field>   Output the specified field value
 
 =cut
 
@@ -34,7 +37,12 @@ while (my $file = shift) {
         context         => $context
     );
 
-    $pdf->parse($data);
+    eval {
+        $pdf->parse($data);
+        1;
+    } or do {
+        die "Error parsing $file: $@";
+    };
     my $info = $pdf->{context}->get_info;
 
     if ( defined($field) ) {
