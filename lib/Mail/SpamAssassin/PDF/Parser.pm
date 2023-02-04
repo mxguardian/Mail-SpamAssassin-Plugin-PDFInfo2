@@ -3,6 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Core;
 use Mail::SpamAssassin::PDF::Filter::FlateDecode;
+use Mail::SpamAssassin::PDF::Filter::ASCII85Decode;
 use Mail::SpamAssassin::PDF::Filter::Decrypt;
 use Mail::SpamAssassin::PDF::Filter::CharMap;
 use Digest::MD5 qw(md5_hex);
@@ -477,6 +478,9 @@ sub _get_stream_data {
     foreach my $filter (@filters) {
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+            $stream_data = $f->decode($stream_data);
+        } elsif ( $filter eq '/ASCII85Decode' ) {
+            my $f = Mail::SpamAssassin::PDF::Filter::ASCII85Decode->new();
             $stream_data = $f->decode($stream_data);
         } else {
             die "Filter $filter not implemented";

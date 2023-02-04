@@ -30,6 +30,7 @@ This plugin requires the following non-core perl modules:
 
 - Crypt::RC4
 - Crypt::Mode::CBC
+- Convert::Ascii85
 
 # INSTALLATION
 

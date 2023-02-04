@@ -56,6 +56,8 @@ This plugin requires the following non-core perl modules:
 
 =item Crypt::Mode::CBC
 
+=item Convert::Ascii85
+
 =back
 
 =head1 INSTALLATION
@@ -1019,6 +1021,22 @@ sub decode {
 }
 
 1;
+package Mail::SpamAssassin::PDF::Filter::ASCII85Decode;
+use strict;
+use warnings FATAL => 'all';
+use Convert::Ascii85;
+
+sub new {
+    my ($class) = @_;
+    bless {}, $class;
+}
+
+sub decode {
+    my ($self, $data) = @_;
+    Convert::Ascii85::decode($data);
+}
+
+1;
 package Mail::SpamAssassin::PDF::Parser;
 use strict;
 use warnings FATAL => 'all';
@@ -1494,6 +1512,9 @@ sub _get_stream_data {
     foreach my $filter (@filters) {
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+            $stream_data = $f->decode($stream_data);
+        } elsif ( $filter eq '/ASCII85Decode' ) {
+            my $f = Mail::SpamAssassin::PDF::Filter::ASCII85Decode->new();
             $stream_data = $f->decode($stream_data);
         } else {
             die "Filter $filter not implemented";

@@ -56,6 +56,8 @@ This plugin requires the following non-core perl modules:
 
 =item Crypt::Mode::CBC
 
+=item Convert::Ascii85
+
 =back
 
 =head1 INSTALLATION
