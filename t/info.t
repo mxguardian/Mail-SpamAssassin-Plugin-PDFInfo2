@@ -402,6 +402,54 @@ my @tests = (
             'uris'            => {}
         }
     },
+    {
+        filename => 't/ham/BlankID.pdf',
+        expected => {
+            'MD5' => '9C9EF3C30ACBD137B23E4FC3C053CD38',
+            'LinkCount' => 0,
+            'Version' => '1.7',
+            'ColorImageCount' => 1,
+            'CreationDate' => '1/25/2023 04:39:15',
+            'Author' => 'Registered to: FNB     ',
+            'ImageCount' => 1,
+            'ClickArea' => 0,
+            'uris' => {},
+            'ImageRatio' => '3.17',
+            'MD5Fuzzy2' => '420B4585E8A39535818291675D81B1C5',
+            'Creator' => 'OpenText Exstream Version 16.6.40 64-bit',
+            'PageCount' => 8,
+            'ClickRatio' => '0.00',
+            'ImageArea' => 15906,
+            'MD5Fuzzy1' => 'FD95C38D801621D09F6E160E9D7BDAD1',
+            'Encrypted' => 1,
+            'Protected' => 0,
+            'PageArea' => 500990,
+            'Title' => 'TDPP'
+        }
+    },
+    {
+        filename => 't/ham/ASCII85Decode.pdf',
+        expected => {
+            'ColorImageCount' => 0,
+            'PageCount' => 1,
+            'ImageCount' => 0,
+            'ClickArea' => 0,
+            'ClickRatio' => '0.00',
+            'Encrypted' => 0,
+            'Type' => '/Info',
+            'ImageRatio' => '0.00',
+            'uris' => {},
+            'ImageArea' => 0,
+            'MD5' => 'A0E0342DCBF55A374DE9AA1CC30CBC7E',
+            'LinkCount' => 0,
+            'PageArea' => 484704,
+            'MD5Fuzzy1' => '99DAE4F5D211CF4E68E2671D41B5C1F4',
+            'Producer' => 'FOP 0.20.4',
+            'MD5Fuzzy2' => '98B057AFF387E870AE7F3ED77873A4A1',
+            'Protected' => 0,
+            'Version' => '1.4'
+        }
+    },
 );
 
 plan tests => scalar(@tests);
