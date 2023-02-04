@@ -911,7 +911,7 @@ sub _generate_key {
     $md5->add(pack('V',$self->{'P'}+0));
 
     # step 5 Pass the first element of the file’s file identifier array
-    $md5->add($self->{ID});
+    $md5->add($self->{ID}) if defined($self->{ID});
 
     # step 6 (Revision 3 only) If document metadata is not being encrypted, pass 4 bytes with
     # the value 0xFFFFFFFF to the MD5 hash function
@@ -1475,7 +1475,7 @@ sub _get_compressed_obj {
     my $data = $self->_get_stream_data($stream_obj);
 
     if ( !defined($stream_obj->{pos}) ) {
-        while ( $data =~ /\G\s*(\d+) (\d+)\s+/ ) {
+        while ( $data =~ /\G\s*(\d+) (\d+)\s*/ ) {
             $stream_obj->{xref}->{$1} = $2;
             pos($data) = $+[0];
         }

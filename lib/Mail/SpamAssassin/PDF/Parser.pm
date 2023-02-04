@@ -441,7 +441,7 @@ sub _get_compressed_obj {
     my $data = $self->_get_stream_data($stream_obj);
 
     if ( !defined($stream_obj->{pos}) ) {
-        while ( $data =~ /\G\s*(\d+) (\d+)\s+/ ) {
+        while ( $data =~ /\G\s*(\d+) (\d+)\s*/ ) {
             $stream_obj->{xref}->{$1} = $2;
             pos($data) = $+[0];
         }
