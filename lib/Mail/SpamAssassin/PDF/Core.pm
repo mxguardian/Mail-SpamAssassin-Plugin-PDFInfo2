@@ -124,7 +124,11 @@ sub get_dict {
 
     my %dict = @array;
 
-    if ( $$ptr =~ /\G\s*stream\r?\n/ ) {
+    # From the docs: "The keyword stream that follows the stream dictionary shall be followed by an end-of-line marker
+    #   consisting of either a CARRIAGE RETURN and a LINE FEED or just a LINE FEED, and not by a CARRIAGE
+    #   RETURN alone."
+    # Unfortunately this isn't always true so we have to allow a single CARRIAGE RETURN
+    if ( $$ptr =~ /\G\s*stream(?:\r\n?|\n)/ ) {
         $dict{_stream_offset} = $+[0];
     }
 
