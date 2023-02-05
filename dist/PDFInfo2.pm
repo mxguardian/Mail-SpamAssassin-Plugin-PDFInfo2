@@ -1359,7 +1359,7 @@ sub _parse_xobject {
 }
 
 sub _parse_contents {
-    my ($self,$objects,$page,$resources) = @_;
+    my ($self,$contents,$page,$resources) = @_;
     return if $self->is_protected();
 
     $resources = $self->_dereference($resources) || $page->{'/Resources'};
@@ -1430,16 +1430,32 @@ sub _parse_contents {
         $dispatch{'T*'} = sub { $context->text_newline(@_) };
     }
 
+    # Contents can be one of the following:
+    # 1. Reference to a content stream i.e. "35 0 R"
+    # 2. An array of content stream references i.e. [ "35 0 R", "36 0 R" ]
+    # 3. A reference to an array of content streams i.e. "6 0 R" which points to [ "35 0 R", "36 0 R" ]
+    # Convert all of the above to an array ref:
+    if (ref($contents) ne 'ARRAY') {
+        # reference to something
+        my $obj = $self->_get_obj($contents);
+        if ( ref($obj) eq 'ARRAY' ) {
+            # reference to an array (#3)
+            $contents = $obj;
+        } else {
+            # reference to a content stream (#1)
+            $contents = [ $contents ];
+        }
+    }
+
     # Concatenate content streams
-    my $contents = '';
-    $objects = [ $objects ] if (ref($objects) ne 'ARRAY');
-    for my $obj ( @$objects ) {
-        $contents .= $self->_get_stream_data($obj);
+    my $stream = '';
+    for my $obj ( @$contents ) {
+        $stream .= $self->_get_stream_data($obj);
     }
 
     # Process commands
     while () {
-        my ($token,$type) = $core->get_primitive(\$contents);
+        my ($token,$type) = $core->get_primitive(\$stream);
         last unless defined($token);
         if ( $type ne 'operator' ) {
             push(@params,$token);
@@ -1447,7 +1463,7 @@ sub _parse_contents {
         }
         # print "$token\n";
         if ( $token eq 'BI' ) {
-            my $image = $self->_parse_inline_image($core,\$contents);
+            my $image = $self->_parse_inline_image($core,\$stream);
             $context->draw_image($image,$page) if $self->{context}->can('draw_image');
             next;
         }
@@ -1501,6 +1517,7 @@ sub _get_obj {
             $self->{data} =~ /\G\s*\d+ \d+ obj\s*/g or die "object $ref not found";
             eval {
                 $obj = $self->{core}->get_primitive(\$self->{data});
+                1;
             } or die "Error getting object $ref: $@";
         }
         if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
