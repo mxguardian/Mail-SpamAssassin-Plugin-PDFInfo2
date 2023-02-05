@@ -499,6 +499,33 @@ my @tests = (
             'PageCount' => 1
         }
     },
+    {
+        filename => 't/spam/InlineImages.pdf',
+        expected => {
+            'PageCount' => 1,
+            'ClickRatio' => '0.00',
+            'ClickArea' => 0,
+            'ColorImageCount' => 14,
+            'Creator' => 'PScript5.dll Version 5.2.2',
+            'Producer' => 'GPL Ghostscript 8.64',
+            'uris' => {},
+            'Author' => 'user',
+            'ImageCount' => 14,
+            'MD5Fuzzy1' => '235B9BA701684A545304B482A8C75E0E',
+            'Protected' => 0,
+            'CreationDate' => 'D:20221228084556+02\'00\'',
+            'Encrypted' => 0,
+            'LinkCount' => 0,
+            'ImageRatio' => '86.02',
+            'Version' => '1.3',
+            'Title' => 'Microsoft Word - Euro-Million Lottery.doc',
+            'ImageArea' => 416927,
+            'ModDate' => 'D:20221228084556+02\'00\'',
+            'MD5Fuzzy2' => '04357B8CB92A2DEC68F0F34ED342311C',
+            'MD5' => '67235006AE5E672C1EB4660ACB532041',
+            'PageArea' => 484704
+        }
+    },
 );
 
 plan tests => scalar(@tests);

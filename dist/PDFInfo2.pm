@@ -359,7 +359,11 @@ sub get_dict {
 
     my %dict = @array;
 
-    if ( $$ptr =~ /\G\s*stream\r?\n/ ) {
+    # From the docs: "The keyword stream that follows the stream dictionary shall be followed by an end-of-line marker
+    #   consisting of either a CARRIAGE RETURN and a LINE FEED or just a LINE FEED, and not by a CARRIAGE
+    #   RETURN alone."
+    # Unfortunately this isn't always true so we have to allow a single CARRIAGE RETURN
+    if ( $$ptr =~ /\G\s*stream(?:\r\n?|\n)/ ) {
         $dict{_stream_offset} = $+[0];
     }
 
@@ -1046,6 +1050,28 @@ use Carp;
 
 my $debug;  # debugging level
 
+my %abbreviations = (
+    '/BPC'  => '/BitsPerComponent',
+    '/CS'   => '/ColorSpace',
+    '/D'    => '/Decode',
+    '/DP'   => '/DecodeParms',
+    '/F'    => '/Filter',
+    '/H'    => '/Height',
+    '/IM'   => '/ImageMask',
+    '/I'    => '/Interpolate',
+    '/W'    => '/Width',
+    '/G'    => '/DeviceGray',
+    '/RGB'  => '/DeviceRGB',
+    '/CMYK' => '/DeviceCMYK',
+    '/AHx'  => '/ASCIIHexDecode',
+    '/A85'  => '/ASCII85Decode',
+    '/LZW'  => '/LZWDecode',
+    '/Fl'   => '/FlateDecode',
+    '/RL'   => '/RunLengthDecode',
+    '/CCF'  => '/CCITTFaxDecode',
+    '/DCT'  => '/DCTDecode'
+);
+
 sub new {
     my ($class,%opts) = @_;
 
@@ -1418,12 +1444,38 @@ sub _parse_contents {
             next;
         }
         # print "$token\n";
+        if ( $token eq 'BI' ) {
+            my $image = $self->_parse_inline_image($core,\$contents);
+            $context->draw_image($image,$page) if $self->{context}->can('draw_image');
+            next;
+        }
         if ( defined($dispatch{$token}) ) {
             $dispatch{$token}->(@params);
         }
         @params = ();
     }
 
+}
+
+sub _parse_inline_image {
+    my ($self,$core,$ptr) = @_;
+
+    my @array;
+    while () {
+        my $token = $core->get_primitive($ptr);
+        last if $token eq 'ID';
+        $token = $abbreviations{$token} if defined($abbreviations{$token});
+        push(@array,$token);
+    }
+    my %image = @array;
+    # print Dumper(\%image);
+
+    # skip over image data
+    my $pos = index($$ptr,'EI',pos($$ptr));
+    die "BI without matching EI" if $pos == -1;
+    pos($$ptr) = $pos;
+
+    \%image;
 }
 
 sub _get_obj {

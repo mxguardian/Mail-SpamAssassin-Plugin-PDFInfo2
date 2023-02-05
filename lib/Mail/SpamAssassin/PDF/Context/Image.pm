@@ -11,6 +11,7 @@ our @ISA = qw(Mail::SpamAssassin::PDF::Context);
  Creates a representational image for each page of a PDF.
 
  - Images are shown as a gray box with a red border
+ - Inline images are shown as a gray box with a green border
  - Text is omitted
  - Vector graphics are drawn with a black line and no fill
  - Clickable areas are shaded blue
@@ -50,8 +51,9 @@ sub draw_image {
     my ($self,$image,$page) = @_;
     my ($a,$b,$c,$d,$e,$f) = @{$self->{gs}->{ctm}};
 
+    my $stroke = defined($image->{'/Subtype'}) && $image->{'/Subtype'} eq '/Image' ? 'red' : 'green';
     my $points = sprintf("%d,%d %d,%d",$self->transform(0,0,1,1));
-    $self->{canvas}->Draw(primitive=>'rectangle', stroke=>'red',fill=>'gray', points=>$points);
+    $self->{canvas}->Draw(primitive=>'rectangle', stroke=>$stroke,fill=>'gray', points=>$points);
 }
 
 sub uri {
