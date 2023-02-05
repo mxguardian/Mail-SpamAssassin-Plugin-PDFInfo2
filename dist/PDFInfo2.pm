@@ -1169,7 +1169,7 @@ sub _parse_xref {
         }
     }
 
-    $self->{data} =~ /\G\s*trailer\s+/g or die "trailer not found";
+    $self->{data} =~ /\G\s*trailer\b\s*/gc or die "trailer not found at offset ".pos($self->{data});
 
     my $trailer = $self->{core}->get_dict(\$self->{data});
     $self->{trailer} = {
