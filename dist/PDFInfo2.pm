@@ -1242,6 +1242,7 @@ sub _parse_pages {
     if ( $node->{'/Type'} eq '/Pages' ) {
         $self->_parse_pages($_, $node) for (@{$node->{'/Kids'}});
     } elsif ( $node->{'/Type'} eq '/Page' ) {
+        $node->{'/MediaBox'} = $self->_dereference($node->{'/MediaBox'});
         my $process_page = 1;
         push @{$self->{pages}}, $node;
         $node->{page_number} = scalar(@{$self->{pages}});

@@ -476,6 +476,29 @@ my @tests = (
             'Protected' => 0
         }
     },
+    {
+        filename => 't/ham/IndirectMediaBox.pdf',
+        expected => {
+            'PageArea' => 484704,
+            'Creator' => 'Crystal Reports',
+            'ImageArea' => 8318,
+            'Encrypted' => 0,
+            'ImageRatio' => '1.72',
+            'Producer' => 'Powered By Crystal',
+            'MD5' => '80AC7DF3D0EEAA04768DFCF5F082FE87',
+            'ImageCount' => 1,
+            'uris' => {},
+            'LinkCount' => 0,
+            'MD5Fuzzy2' => '457A89BA25BB30BC636CA6C1B981CB80',
+            'Protected' => 0,
+            'Version' => '1.7',
+            'ClickRatio' => '0.00',
+            'ColorImageCount' => 1,
+            'ClickArea' => 0,
+            'MD5Fuzzy1' => 'C98BA1861F8C32E3AA16583B0C8757D2',
+            'PageCount' => 1
+        }
+    },
 );
 
 plan tests => scalar(@tests);
