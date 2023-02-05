@@ -23,7 +23,9 @@ sub decode {
     return $data unless defined($self->{predictor});
 
     my $out;
-    if ( $self->{predictor} == 2 ) {
+    if ( $self->{predictor} == 1 ) {
+        return $data;
+    } elsif ( $self->{predictor} == 2 ) {
         die "TIFF Predictor not implemented";
     } elsif ( $self->{predictor} >= 10 ) {
 
