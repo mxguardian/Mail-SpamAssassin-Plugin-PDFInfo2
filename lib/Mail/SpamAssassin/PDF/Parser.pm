@@ -296,7 +296,7 @@ sub _parse_xobject {
 }
 
 sub _parse_contents {
-    my ($self,$contents,$page,$resources) = @_;
+    my ($self,$objects,$page,$resources) = @_;
     return if $self->is_protected();
 
     $resources = $self->_dereference($resources) || $page->{'/Resources'};
@@ -367,24 +367,26 @@ sub _parse_contents {
         $dispatch{'T*'} = sub { $context->text_newline(@_) };
     }
 
+    # Concatenate content streams
+    my $contents = '';
+    $objects = [ $objects ] if (ref($objects) ne 'ARRAY');
+    for my $obj ( @$objects ) {
+        $contents .= $self->_get_stream_data($obj);
+    }
+
     # Process commands
-    $contents = [ $contents ] if (ref($contents) ne 'ARRAY');
-    for my $obj ( @$contents ) {
-        my $stream = $self->_get_stream_data($obj);
-        # print "$stream\n\n";
-        while () {
-            my ($token,$type) = $core->get_primitive(\$stream);
-            last unless defined($token);
-            if ( $type ne 'operator' ) {
-                push(@params,$token);
-                next;
-            }
-            # print "$token\n";
-            if ( defined($dispatch{$token}) ) {
-                $dispatch{$token}->(@params);
-            }
-            @params = ();
+    while () {
+        my ($token,$type) = $core->get_primitive(\$contents);
+        last unless defined($token);
+        if ( $type ne 'operator' ) {
+            push(@params,$token);
+            next;
         }
+        # print "$token\n";
+        if ( defined($dispatch{$token}) ) {
+            $dispatch{$token}->(@params);
+        }
+        @params = ();
     }
 
 }

@@ -450,6 +450,32 @@ my @tests = (
             'Version' => '1.4'
         }
     },
+    {
+        filename => 't/ham/Covid19NoticeFNF.pdf',
+        expected => {
+            'MD5' => '2B8E71DA6F1315444EB77C812796C200',
+            'PageCount' => 2,
+            'Creator' => 'Adobe InDesign 17.0 (Windows)',
+            'ClickRatio' => '0.00',
+            'ImageArea' => 88938,
+            'CreationDate' => 'D:20220407151732-04\'00\'',
+            'ModDate' => 'D:20220408074935-07\'00\'',
+            'ClickArea' => 0,
+            'ImageRatio' => '18.35',
+            'uris' => {},
+            'Trapped' => '/False',
+            'Version' => '1.6',
+            'ColorImageCount' => 1,
+            'MD5Fuzzy1' => 'CED1460EF6027D590BB4BADBC20512AA',
+            'Producer' => 'Adobe PDF Library 16.0.3',
+            'Encrypted' => 0,
+            'ImageCount' => 1,
+            'LinkCount' => 0,
+            'PageArea' => 484704,
+            'MD5Fuzzy2' => 'C506E8DFDD529A6619E5DB8A414F5DE4',
+            'Protected' => 0
+        }
+    },
 );
 
 plan tests => scalar(@tests);
