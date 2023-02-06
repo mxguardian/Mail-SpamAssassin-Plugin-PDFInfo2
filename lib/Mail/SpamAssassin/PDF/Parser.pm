@@ -123,7 +123,7 @@ sub _parse_xref {
         pos($self->{data}) = $+[0]; # advance the pointer
         my ($start,$count) = ($1,$2);
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
-            $self->{data} =~ /\G(\d+) (\d+) (f|n)\s+/g or die "Invalid xref entry";
+            $self->{data} =~ /\G(\d+) (\d+) (f|n)\s+/gc or die "Invalid xref entry at offset ".pos($self->{data});
             next unless $3 eq 'n';
             my ($offset,$gen) = ($1+0,$2+0);
             my $key = "$i $gen R";
