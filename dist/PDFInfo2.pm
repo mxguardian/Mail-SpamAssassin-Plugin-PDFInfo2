@@ -1686,6 +1686,7 @@ sub post_message_parse {
         };
         if ( !defined($info) ) {
             dbg("pdfinfo2: Error parsing pdf: $@");
+            $msg->put_metadata('X-PDFInfo2-Error',$@);
             next;
         }
 
