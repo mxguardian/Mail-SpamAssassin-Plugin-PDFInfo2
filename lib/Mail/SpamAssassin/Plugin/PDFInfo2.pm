@@ -283,6 +283,7 @@ sub post_message_parse {
     my ($self, $opts) = @_;
 
     my $msg = $opts->{'message'};
+    my $errors = 0;
 
     $msg->{pdfparts} = [];
     foreach my $p ($msg->find_parts(qr/./,1)) {
@@ -306,13 +307,14 @@ sub post_message_parse {
         };
         if ( !defined($info) ) {
             dbg("pdfinfo2: Error parsing pdf: $@");
-            $msg->put_metadata('X-PDFInfo2-Error',$@);
+            $errors++;
             next;
         }
 
         $p->{pdfinfo2} = $info;
 
     }
+    $msg->put_metadata('X-PDFInfo2-Errors',$errors);
 
 }
 
