@@ -3,6 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Context;
 use Image::Magick;
+use Data::Dumper;
 
 our @ISA = qw(Mail::SpamAssassin::PDF::Context);
 
@@ -44,6 +45,10 @@ sub page_begin {
     $self->{canvas} = Image::Magick->new(size=>$size);
     $self->{canvas}->ReadImage('canvas:white');
     $self->{uris} = [];
+
+    # flip on horizontal axis
+    $self->concat_matrix( 1, 0, 0, -1, 0, $page->{'/MediaBox'}->[3] );
+
     return 1;
 }
 
@@ -130,16 +135,4 @@ sub path_draw {
 sub path_end {
     my ($self) = @_;
     $self->{path} = '';
-}
-
-sub transform {
-    my $self = shift;
-    my $h = $self->{canvas}->get('height');
-
-    my @out = $self->SUPER::transform(@_);
-    # flip vertically
-    for(my $i=1;$i<=$#out;$i+=2) {
-        $out[$i] = $h - $out[$i];
-    }
-    @out;
 }
