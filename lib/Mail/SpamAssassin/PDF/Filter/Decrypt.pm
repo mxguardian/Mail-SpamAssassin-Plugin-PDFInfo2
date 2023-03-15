@@ -4,6 +4,7 @@ use warnings FATAL => 'all';
 use Digest::MD5;
 use Crypt::RC4;
 use Crypt::Mode::CBC;
+use Digest::SHA;
 use Carp;
 use Data::Dumper;
 
@@ -29,7 +30,7 @@ sub new {
     my $v = $encrypt->{'/V'} || 0;
     my $length = $encrypt->{'/Length'} || 40;
 
-    unless ( $v == 1 || $v == 2 || $v == 4 ) {
+    unless ( $v == 1 || $v == 2 || $v == 4 || $v == 5 ) {
         die "Encryption algorithm $v not implemented";
     }
 
@@ -43,6 +44,11 @@ sub new {
         ID        => $doc_id,
         keylength => ($v == 1 ? 40 : $length),
     }, $class;
+
+    if ( $v == 5 ) {
+        $self->{OE} = $encrypt->{'/OE'};
+        $self->{UE} = $encrypt->{'/UE'};
+    }
 
     my $password = '';
 
@@ -62,11 +68,12 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
-    if ( $self->{V} == 4 ) {
+    if ( $self->{V} == 4 || $self->{V} == 5 ) {
         # todo: Implement Crypt Filters
         my $iv = substr($content,0,16);
         my $m = Crypt::Mode::CBC->new('AES');
-        return $m->decrypt(substr($content,16),$self->_compute_key(),$iv);
+        my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
+        return $m->decrypt(substr($content,16),$key,$iv);
     }
     return Crypt::RC4::RC4($self->_compute_key(), $content);
 
@@ -97,7 +104,7 @@ sub _check_user_password {
             return 1;
         }
 
-    } elsif ( $self->{R} >= 3 ) {
+    } elsif ( $self->{R} == 3 || $self->{R} == 4 ) {
 
         #
         # Algorithm 3.5 Computing the encryption dictionary’s U (user password) value (Revision 3)
@@ -137,6 +144,30 @@ sub _check_user_password {
             $self->{code} = $key;
             return 1;
         }
+    } elsif ( $self->{R} == 5 ) {
+
+        # calculate the SHA-256 hash of the password + the User Validation Salt
+        my $sha = Digest::SHA->new(256);
+        $sha->add($pass);
+        $sha->add(substr($self->{U},32,8));
+        my $hash = $sha->digest();
+
+        # validate password
+        if ($hash ne substr($self->{U}, 0, 32)) {
+            return 0;
+        }
+
+        # calculate the SHA-256 hash of the password + the User Key Salt (the intermediate key)
+        $sha->reset();
+        $sha->add($pass);
+        $sha->add(substr($self->{U},40,8));
+        my $temp_key = $sha->digest();
+
+        # decrypt the File Encryption Key using the intermediate key
+        my $m = Crypt::Mode::CBC->new('AES', 0);
+        my $iv = "\0" x 16;
+        $self->{code} = $m->decrypt($self->{UE},$temp_key,$iv);
+        return 1;
 
     } else {
         croak "Revision $self->{R} not implemented";
@@ -198,7 +229,7 @@ sub _compute_key {
         my $md5 = Digest::MD5->new();
         $md5->add($self->{code});
         $md5->add(substr($objstr, 0, 3).substr($genstr, 0, 2));
-        if ( $self->{V} == 4 ) {
+        if ( $self->{V} == 4  || $self->{V} == 5 ) {
             $md5->add('sAlT');
         }
         my $hash = $md5->digest();

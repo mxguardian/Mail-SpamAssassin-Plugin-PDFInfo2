@@ -25,6 +25,8 @@ my $field = $opts{'f'};
 
 pod2usage() unless scalar(@ARGV);
 
+$Data::Dumper::Sortkeys = 1;
+
 while (my $file = shift) {
     open my $fh, '<', $file or die "$!";
     local $/ = undef;

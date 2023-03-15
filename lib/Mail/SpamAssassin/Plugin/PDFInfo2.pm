@@ -39,6 +39,8 @@ Links to the official PDF specification:
 
 =item Version 1.7: L<https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf>
 
+=item Version 1.7 Extension Level 3: L<https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe_supplement_iso32000.pdf>
+
 =back
 
 =head1 DISCLAIMERS

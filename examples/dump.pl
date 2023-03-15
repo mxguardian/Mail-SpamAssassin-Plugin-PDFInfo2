@@ -28,6 +28,8 @@ getopts('Ffg:o:s:',\%opts);
 my ($file) = @ARGV;
 pod2usage() unless defined $file;
 
+$Data::Dumper::Sortkeys = 1;
+
 open my $fh, '<', $file or die "Error opening $file: $!";
 local $/ = undef;
 my $data = <$fh>;
