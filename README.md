@@ -2,15 +2,17 @@
 
 Mail::SpamAssassin::Plugin::PDFInfo2 - Improved PDF Plugin for SpamAssassin
 
-# AUTHORS
-
-Kent Oyer (kent@mxguardian.net)
-
 # ACKNOWLEGEMENTS
 
 This plugin is loosely based on Mail::SpamAssassin::Plugin::PDFInfo by Dallas Engelken however it is not a drop-in
 replacement as it works completely different. The tag and test names have been chosen so that both plugins can be run
 simultaneously, if desired.
+
+Notable improvements:
+
+- It can parse PDF's that are encrypted with a blank password
+- Several of the tests focus exclusively on page 1 of each document. This not only helps with performance but is a countermeasure against content stuffing
+- pdf2\_click\_ratio - Fires based on how much of page 1 is clickable. Based on preliminary testing, anything over 20% is likely spam, especially if there's only one link and the word count is low.
 
 Encryption routines were made possible by borrowing some code from CAM::PDF by Chris Dolan
 
@@ -19,11 +21,6 @@ Links to the official PDF specification:
 - Version 1.6: [https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.6.pdf](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.6.pdf)
 - Version 1.7: [https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000\_2008.pdf](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)
 - Version 1.7 Extension Level 3: [https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe\_supplement\_iso32000.pdf](https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe_supplement_iso32000.pdf)
-
-# DISCLAIMERS
-
-This code has been tested and **should** function fine in a production environment. However, use it at your own risk.
-The author of this package is not affiliated with SpamAssassin or the Apache Software Foundation
 
 # REQUIREMENTS
 
@@ -202,3 +199,18 @@ This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using th
     uri-detail RULENAME  type =~ /^pdf$/  raw =~ /^https?:\/\/bit\.ly\//
 
 This will detect a bit.ly link inside a PDF document
+
+# AUTHORS
+
+Kent Oyer <kent@mxguardian.net>
+
+# COPYRIGHT AND LICENSE
+
+Copyright (C) 2023 MXGuardian LLC
+
+This is free software; you can redistribute it and/or modify it under
+the terms of the Apache License 2.0. See the LICENSE file included
+with this distribution for more information.
+
+This plugin is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.

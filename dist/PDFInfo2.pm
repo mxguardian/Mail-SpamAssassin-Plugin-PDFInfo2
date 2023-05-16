@@ -19,15 +19,23 @@
 
 Mail::SpamAssassin::Plugin::PDFInfo2 - Improved PDF Plugin for SpamAssassin
 
-=head1 AUTHORS
-
-Kent Oyer (kent@mxguardian.net)
-
 =head1 ACKNOWLEGEMENTS
 
 This plugin is loosely based on Mail::SpamAssassin::Plugin::PDFInfo by Dallas Engelken however it is not a drop-in
 replacement as it works completely different. The tag and test names have been chosen so that both plugins can be run
 simultaneously, if desired.
+
+Notable improvements:
+
+=over 4
+
+=item It can parse PDF's that are encrypted with a blank password
+
+=item Several of the tests focus exclusively on page 1 of each document. This not only helps with performance but is a countermeasure against content stuffing
+
+=item pdf2_click_ratio - Fires based on how much of page 1 is clickable. Based on preliminary testing, anything over 20% is likely spam, especially if there's only one link and the word count is low.
+
+=back
 
 Encryption routines were made possible by borrowing some code from CAM::PDF by Chris Dolan
 
@@ -42,11 +50,6 @@ Links to the official PDF specification:
 =item Version 1.7 Extension Level 3: L<https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe_supplement_iso32000.pdf>
 
 =back
-
-=head1 DISCLAIMERS
-
-This code has been tested and B<should> function fine in a production environment. However, use it at your own risk.
-The author of this package is not affiliated with SpamAssassin or the Apache Software Foundation
 
 =head1 REQUIREMENTS
 
@@ -232,6 +235,21 @@ This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using th
     uri-detail RULENAME  type =~ /^pdf$/  raw =~ /^https?:\/\/bit\.ly\//
 
 This will detect a bit.ly link inside a PDF document
+
+=head1 AUTHORS
+
+Kent Oyer <kent@mxguardian.net>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2023 MXGuardian LLC
+
+This is free software; you can redistribute it and/or modify it under
+the terms of the Apache License 2.0. See the LICENSE file included
+with this distribution for more information.
+
+This plugin is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 =cut
 
@@ -818,8 +836,8 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
-    # todo: Implement Crypt Filters
     if ( $self->{V} == 4 || $self->{V} == 5 ) {
+        # todo: Implement Crypt Filters
         my $iv = substr($content,0,16);
         my $m = Crypt::Mode::CBC->new('AES');
         my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
