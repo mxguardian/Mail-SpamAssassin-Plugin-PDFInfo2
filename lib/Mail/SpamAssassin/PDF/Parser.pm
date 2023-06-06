@@ -261,7 +261,7 @@ sub _parse_annotations {
     return unless defined($annots);
 
     for my $ref (@$annots) {
-        my $annot = $self->_get_obj($ref);
+        my $annot = $self->_dereference($ref);
         if ( defined($annot->{'/Subtype'}) && $annot->{'/Subtype'} eq '/Link' && defined($annot->{'/A'}) ) {
             $self->_parse_action($annot->{'/A'},$annot->{'/Rect'},$page);
         }

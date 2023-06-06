@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use lib 'lib';
 use Test::More;
 use Mail::SpamAssassin::PDF::Parser;
 use Mail::SpamAssassin::PDF::Context::Info;
@@ -330,6 +331,41 @@ my @tests = (
             'ModDate' => 'D:20230120165641+03\'00\'',
             'PageArea' => 500990,
             'ClickArea' => 295697
+        }
+    },
+    {
+        filename => 't/spam/Bitcoin2.pdf',
+        expected => {
+            'Author' => 'Watson',
+            'ClickArea' => 419832,
+            'ClickRatio' => '82.62',
+            'ColorImageCount' => 1,
+            'CreationDate' => 'D:20200425064028+03\'00\'',
+            'Creator' => 'Telerik Reporting 5.9.3',
+            'Encrypted' => 0,
+            'ImageArea' => 397747,
+            'ImageCount' => 1,
+            'ImageRatio' => '78.27',
+            'LinkCount' => 14,
+            'MD5' => '4D2FD875F85BA63F368AEE434A715630',
+            'MD5Fuzzy1' => '5639293CE975727D8DB6B337A60AEB63',
+            'MD5Fuzzy2' => '1B4CEC89ACB86A099433E791903F767D',
+            'PageArea' => 508176,
+            'PageCount' => 4,
+            'Producer' => 'LibreOffice 8.13',
+            'Protected' => 0,
+            'Subject' => 'angry',
+            'Title' => 'five',
+            'Version' => '1.4',
+            'uris' => {
+                'https://app.rarible.com/#5exzrm8f8fpuq90j6lp6v' => 1,
+                'https://avellinotoday.it/#dgv3is797sr1t48tr101' => 1,
+                'https://dpmms.cam.ac.uk/#honqzkb' => 1,
+                'https://esrc.ac.uk/#c8rdoiml' => 1,
+                'https://grelsin.blogspot.com/#qudjig0jnlqwc9fxyf' => 1,
+                'https://livius.org/#cddx' => 1,
+                'https://nikytap.de/04yb/#81zo' => 1
+            }
         }
     },
     {
