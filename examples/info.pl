@@ -36,7 +36,8 @@ while (my $file = shift) {
     my $context = Mail::SpamAssassin::PDF::Context::Info->new();
 
     my $pdf = Mail::SpamAssassin::PDF::Parser->new(
-        context         => $context
+        context         => $context,
+        timeout         => 5,
     );
 
     eval {

@@ -256,7 +256,7 @@ implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 package Mail::SpamAssassin::Plugin::PDFInfo2;
 
 use Mail::SpamAssassin::Plugin;
-use Mail::SpamAssassin::Logger;
+use Mail::SpamAssassin::Logger ();
 use Mail::SpamAssassin::Util qw(compile_regexp);
 use strict;
 use warnings;
@@ -264,9 +264,12 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.10;
+my $VERSION = 0.12;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
+
+sub log_dbg  { Mail::SpamAssassin::Logger::dbg ("pdfinfo2: @_"); }
+sub log_warn { Mail::SpamAssassin::Logger::log_message('warn', "pdfinfo2: @_"); }
 
 # constructor: register the eval rule
 sub new {
@@ -312,7 +315,7 @@ sub post_message_parse {
 
         next unless $type =~ qr/\/pdf$/ or $name =~ /\.pdf$/i;
 
-        dbg("pdfinfo2: found part, type=$type file=$name");
+        log_dbg("found part, type=$type file=$name");
         push(@{$msg->{pdfparts}},$p);
 
         # Get raw PDF data
@@ -320,13 +323,13 @@ sub post_message_parse {
         next unless $data;
 
         # Parse PDF
-        my $pdf = Mail::SpamAssassin::PDF::Parser->new();
+        my $pdf = Mail::SpamAssassin::PDF::Parser->new(timeout => 5);
         my $info = eval {
             $pdf->parse($data);
             $pdf->{context}->get_info();
         };
         if ( !defined($info) ) {
-            dbg("pdfinfo2: Error parsing pdf: $@");
+            log_warn("Error parsing pdf: $@");
             $errors++;
             next;
         }
@@ -365,7 +368,7 @@ sub parsed_metadata {
 
         # Add URI's
         foreach my $location ( keys %{ $info->{uris} }) {
-            dbg("pdfinfo2: found URI: $location");
+            log_dbg("found URI: $location");
             $pms->add_uri_detail_list($location,{ pdf => 1 },'PDFInfo2');
         }
 
@@ -413,7 +416,7 @@ sub _set_tag {
     my ($pms, $tag, $value) = @_;
 
     return unless defined $value && $value ne '';
-    dbg("pdfinfo2: set_tag called for $tag: $value");
+    log_dbg("set_tag called for $tag: $value");
 
     if (exists $pms->{tag_data}->{$tag}) {
         # Limit to some sane length
@@ -525,7 +528,7 @@ sub pdf2_match_details {
     foreach (keys %{$pms->{pdfinfo2}->{files}}) {
         my $value = $pms->{pdfinfo2}->{files}->{$_}->{$detail};
         if ( defined($value) && $value =~ $re ) {
-            dbg("pdfinfo2: pdf2_match_details $detail ($regex) match: $_");
+            log_dbg("pdf2_match_details $detail ($regex) match: $_");
             return 1;
         }
     }

@@ -49,6 +49,8 @@ sub new {
 
         object_cache => {},
         stream_cache => {},
+
+        timeout      => $opts{timeout},
     }, $class;
 
     $debug = $opts{debug};
@@ -64,29 +66,45 @@ sub parse {
     $self->{data} =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
     $self->{version} = $1;
 
-    # Parse cross-reference table (and trailer)
-    $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
-    $self->_parse_xref($1);
+    local $SIG{ALRM} = sub {die "__TIMEOUT__\n"};
+    alarm($self->{timeout}) if (defined($self->{timeout}));
 
-    # Parse encryption dictionary
-    $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
+    eval {
 
-    # Parse info object
-    $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
-    $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
+        # Parse cross-reference table (and trailer)
+        $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
+        $self->_parse_xref($1);
 
-    # Parse catalog
-    my $root = $self->{trailer}->{'/Root'};
-    if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
-        $self->_parse_action($root->{'/OpenAction'});
-    }
+        # Parse encryption dictionary
+        $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
 
-    $self->{context}->parse_begin($self) if $self->{context}->can('parse_begin');
+        # Parse info object
+        $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
+        $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
 
-    # Parse page tree
-    $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
+        # Parse catalog
+        my $root = $self->{trailer}->{'/Root'};
+        if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
+            $self->_parse_action($root->{'/OpenAction'});
+        }
 
-    $self->{context}->parse_end($self) if $self->{context}->can('parse_end');
+        $self->{context}->parse_begin($self) if $self->{context}->can('parse_begin');
+
+        # Parse page tree
+        $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
+
+        $self->{context}->parse_end($self) if $self->{context}->can('parse_end');
+
+        1;
+    } or do {
+        if ( $@ eq "__TIMEOUT__\n" ) {
+            croak "Timeout limit exceeded";
+        }
+        alarm(0);
+        die $@;
+    };
+
+    alarm(0);
 
 }
 
