@@ -1,0 +1,1070 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="258" onload="init(evt)" viewBox="0 0 1200 258" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<defs >
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	.func_g:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	var details, svg;
+	function init(evt) { 
+		details = document.getElementById("details").firstChild; 
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+	}
+
+	// mouse-over for info
+	function s(info) { details.nodeValue = "sub " + info; }
+	function c() { details.nodeValue = ' '; }
+
+	// functions
+	function find_child(parent, name, attr) {
+		var children = parent.childNodes;
+		for (var i=0; i<children.length;i++) {
+			if (children[i].tagName == name)
+				return (attr != undefined) ? children[i].attributes[attr].value : children[i];
+		}
+		return;
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_"+attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_"+attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_"+attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes["width"].value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)/,"");
+		t.attributes["x"].value = parseFloat(r.attributes["x"].value) +3;
+		
+		// Smaller than this size won't fit anything
+		if (w < 2*12*0.59) {
+			t.textContent = "";
+			return;
+		}
+		
+		t.textContent = txt;
+		// Fit in full text width
+		if (/^ *$/.test(txt) || t.getSubStringLength(0, txt.length) < w)
+			return;
+		
+		for (var x=txt.length-2; x>0; x--) {
+			if (t.getSubStringLength(0, x+2) <= w) { 
+				t.textContent = txt.substring(0,x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes["x"] != undefined) {
+				orig_save(e, "x");
+				e.attributes["x"].value = (parseFloat(e.attributes["x"].value) - x - 10) * ratio + 10;
+				if(e.tagName == "text") e.attributes["x"].value = find_child(e.parentNode, "rect", "x") + 3;
+			}
+			if (e.attributes["width"] != undefined) {
+				orig_save(e, "width");
+				e.attributes["width"].value = parseFloat(e.attributes["width"].value) * ratio;
+			}
+		}
+		
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_child(c[i], x-10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes["x"] != undefined) {
+				orig_save(e, "x");
+				e.attributes["x"].value = 10;
+			}
+			if (e.attributes["width"] != undefined) {
+				orig_save(e, "width");
+				e.attributes["width"].value = parseInt(svg.width.baseVal.value) - (10*2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) { 
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr["width"].value);
+		var xmin = parseFloat(attr["x"].value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr["y"].value);
+		var ratio = (svg.width.baseVal.value - 2*10) / width;
+		
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+		
+		var unzoombtn = document.getElementById("unzoom");
+		unzoombtn.style["opacity"] = "1.0";
+		
+		var el = document.getElementsByTagName("g");
+		for(var i=0;i<el.length;i++){
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a["x"].value);
+			var ew = parseFloat(a["width"].value);
+			// Is it an ancestor
+			if (0 == 0) {
+				var upstack = parseFloat(a["y"].value) > ymin;
+			} else {
+				var upstack = parseFloat(a["y"].value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.style["opacity"] = "0.5";
+					zoom_parent(e);
+					e.onclick = function(e){unzoom(); zoom(this);};
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.style["display"] = "none";
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.style["display"] = "none";
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					e.onclick = function(e){zoom(this);};
+					update_text(e);
+				}
+			}
+		}
+	}
+	function unzoom() {
+		var unzoombtn = document.getElementById("unzoom");
+		unzoombtn.style["opacity"] = "0.0";
+		
+		var el = document.getElementsByTagName("g");
+		for(i=0;i<el.length;i++) {
+			el[i].style["display"] = "block";
+			el[i].style["opacity"] = "1";
+			zoom_reset(el[i]);
+			update_text(el[i]);
+		}
+	}	
+
+	// search
+	function reset_search() {
+		var el = document.getElementsByTagName("rect");
+		for (var i=0; i < el.length; i++){
+			orig_load(el[i], "fill")
+		}
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)", "");
+			if (term != null) {
+				search(term)
+			}
+		} else {
+			reset_search();
+			searching = 0;
+			var searchbtn = document.getElementById("search");
+			searchbtn.style["opacity"] = "0.1";
+			searchbtn.firstChild.nodeValue = "Search"
+		}
+	}
+	function search(term) {
+		var re = new RegExp(term);
+		var el = document.getElementsByTagName("g");
+		for (var i=0; i < el.length; i++){
+			var e = el[i];
+			if (e.attributes["class"].value == "func_g") {
+				// Scrape the function name from the onmouseover
+				// callback text. This is a little dirty.
+				var func = e.attributes["onmouseover"].value;
+				if (func != null) {
+					func = func.substr(3);
+					func = func.replace(/ .*/, "");
+					var r = find_child(e, "rect");
+					if (r == null) {
+						// the rect might be wrapped in an anchor
+						// if nameattr href is being used
+						if (r = find_child(e, "a")) {
+						    r = find_child(r, "rect");
+						}
+					}
+				}
+				if (func != null && r != null &&
+				    func.match(re)) {
+					orig_save(r, "fill");
+					r.attributes["fill"].value =
+					    "rgb(230,0,230)";
+					searching = 1;
+				}
+			}
+		}
+		if (searching) {
+			var searchbtn = document.getElementById("search");
+			searchbtn.style["opacity"] = "1.0";
+			searchbtn.firstChild.nodeValue = "Reset Search"
+		}
+	}
+	function searchover(e) {
+		var searchbtn = document.getElementById("search");
+		searchbtn.style["opacity"] = "1.0";
+	}
+	function searchout(e) {
+		var searchbtn = document.getElementById("search");
+		if (searching) {
+			searchbtn.style["opacity"] = "1.0";
+		} else {
+			searchbtn.style["opacity"] = "0.1";
+		}
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="258.0" fill="url(#background)"  />
+<text text-anchor="middle" x="600.00" y="24" font-size="17" font-family="Verdana" fill="rgb(0,0,0)"  >Flame Graph</text>
+<text text-anchor="" x="10.00" y="241" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="details" > </text>
+<text text-anchor="" x="10.00" y="24" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="unzoom" onclick="unzoom()" style="opacity:0.0;cursor:pointer" >Reset Zoom</text>
+<text text-anchor="" x="1090.00" y="24" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="search" onmouseover="searchover()" onmouseout="searchout()" onclick="search_prompt()" style="opacity:0.1;cursor:pointer" >Search</text>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::BEGIN@6 (6,594 microseconds, 0.13%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::BEGIN@6 (6,594 microseconds, 0.13%)</title><a xlink:href="Parser-pm-6-line.html#6" target="_top"><rect x="1162.5" y="177" width="1.5" height="15.0" fill="rgb(233,99,31)" rx="2" ry="2" />
+<text text-anchor="" x="1165.49" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Base::Common::BEGIN@9 (8,954 microseconds, 0.17%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Base::Common::BEGIN@9 (8,954 microseconds, 0.17%)</title><a xlink:href="IO-Compress-Base-Common-pm-37-line.html#9" target="_top"><rect x="1142.4" y="129" width="2.1" height="15.0" fill="rgb(228,163,26)" rx="2" ry="2" />
+<text text-anchor="" x="1145.45" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Usage::BEGIN@22 (18,280 microseconds, 0.35%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Usage::BEGIN@22 (18,280 microseconds, 0.35%)</title><a xlink:href="Pod-Usage-pm-79-line.html#22" target="_top"><rect x="1176.4" y="177" width="4.2" height="15.0" fill="rgb(245,212,44)" rx="2" ry="2" />
+<text text-anchor="" x="1179.41" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_parse_info (1,193 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_parse_info (1,193 microseconds, 0.02%)</title><a xlink:href="Parser-pm-6-line.html#225" target="_top"><rect x="12.1" y="177" width="0.2" height="15.0" fill="rgb(248,99,47)" rx="2" ry="2" />
+<text text-anchor="" x="15.06" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@15 (1,760 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@15 (1,760 microseconds, 0.03%)</title><a xlink:href="Encode-pm-8-line.html#15" target="_top"><rect x="1126.8" y="145" width="0.4" height="15.0" fill="rgb(241,148,40)" rx="2" ry="2" />
+<text text-anchor="" x="1129.81" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Handle::BEGIN@267 (1,331 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Handle::BEGIN@267 (1,331 microseconds, 0.03%)</title><a xlink:href="IO-Handle-pm-30-line.html#267" target="_top"><rect x="1160.6" y="129" width="0.3" height="15.0" fill="rgb(233,163,31)" rx="2" ry="2" />
+<text text-anchor="" x="1163.60" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::UTF_EBCDIC::BEGIN@178 (2,472 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::UTF_EBCDIC::BEGIN@178 (2,472 microseconds, 0.05%)</title><a xlink:href="Encode-pm-8-line.html#178" target="_top"><rect x="1133.6" y="145" width="0.6" height="15.0" fill="rgb(243,148,42)" rx="2" ry="2" />
+<text text-anchor="" x="1136.64" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_array (1,082 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_array (1,082 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#96" target="_top"><rect x="12.7" y="65" width="0.2" height="15.0" fill="rgb(239,99,37)" rx="2" ry="2" />
+<text text-anchor="" x="15.67" y="75.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,103 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,103 microseconds, 0.02%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1144.2" y="97" width="0.2" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1147.16" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Crypt::Mode::CBC::BEGIN@9 (16,522 microseconds, 0.32%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Crypt::Mode::CBC::BEGIN@9 (16,522 microseconds, 0.32%)</title><a xlink:href="Crypt-Mode-CBC-pm-64-line.html#9" target="_top"><rect x="1167.5" y="145" width="3.8" height="15.0" fill="rgb(228,150,26)" rx="2" ry="2" />
+<text text-anchor="" x="1170.50" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_dereference (1,134 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_dereference (1,134 microseconds, 0.02%)</title><a xlink:href="Parser-pm-6-line.html#517" target="_top"><rect x="12.1" y="161" width="0.2" height="15.0" fill="rgb(251,99,51)" rx="2" ry="2" />
+<text text-anchor="" x="15.08" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Uncompress::Gunzip::BEGIN@12 (21,116 microseconds, 0.41%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Uncompress::Gunzip::BEGIN@12 (21,116 microseconds, 0.41%)</title><a xlink:href="IO-Uncompress-Gunzip-pm-52-line.html#12" target="_top"><rect x="1154.0" y="129" width="4.8" height="15.0" fill="rgb(246,163,45)" rx="2" ry="2" />
+<text text-anchor="" x="1157.04" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Uncompress::RawInflate::BEGIN@11 (11,509 microseconds, 0.22%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Uncompress::RawInflate::BEGIN@11 (11,509 microseconds, 0.22%)</title><a xlink:href="IO-Uncompress-RawInflate-pm-53-line.html#11" target="_top"><rect x="1154.8" y="113" width="2.7" height="15.0" fill="rgb(231,163,28)" rx="2" ry="2" />
+<text text-anchor="" x="1157.85" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (960 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (960 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="12.1" y="113" width="0.2" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.12" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Simple::BEGIN@8 (6,374 microseconds, 0.12%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Simple::BEGIN@8 (6,374 microseconds, 0.12%)</title><a xlink:href="Pod-Simple-pm-85-line.html#8" target="_top"><rect x="1183.8" y="145" width="1.4" height="15.0" fill="rgb(230,212,28)" rx="2" ry="2" />
+<text text-anchor="" x="1186.79" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::ret_summary (1,372 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::ret_summary (1,372 microseconds, 0.03%)</title><a xlink:href="Carp-pm-12-line.html#628" target="_top"><rect x="10.1" y="129" width="0.3" height="15.0" fill="rgb(248,109,47)" rx="2" ry="2" />
+<text text-anchor="" x="13.09" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('main::BEGIN@5 (224,162 microseconds, 4.33%)')" onmouseout="c()" onclick="zoom(this)">
+<title>main::BEGIN@5 (224,162 microseconds, 4.33%)</title><a xlink:href="info-pl-1-line.html#5" target="_top"><rect x="1123.0" y="193" width="51.1" height="15.0" fill="rgb(235,83,33)" rx="2" ry="2" />
+<text text-anchor="" x="1125.99" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >main:..</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (733 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (733 microseconds, 0.01%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1170.6" y="65" width="0.2" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1173.63" y="75.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('JSON::XS::BEGIN@100 (3,365 microseconds, 0.06%)')" onmouseout="c()" onclick="zoom(this)">
+<title>JSON::XS::BEGIN@100 (3,365 microseconds, 0.06%)</title><a xlink:href="JSON-XS-pm-67-line.html#100" target="_top"><rect x="1168.8" y="97" width="0.8" height="15.0" fill="rgb(235,145,34)" rx="2" ry="2" />
+<text text-anchor="" x="1171.82" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (1,999 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (1,999 microseconds, 0.04%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="12.6" y="81" width="0.4" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.57" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::shortmess_heavy (1,505 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::shortmess_heavy (1,505 microseconds, 0.03%)</title><a xlink:href="Carp-pm-12-line.html#680" target="_top"><rect x="10.1" y="145" width="0.3" height="15.0" fill="rgb(243,109,42)" rx="2" ry="2" />
+<text text-anchor="" x="13.09" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::caller_info (1,354 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::caller_info (1,354 microseconds, 0.03%)</title><a xlink:href="Carp-pm-12-line.html#305" target="_top"><rect x="10.1" y="113" width="0.3" height="15.0" fill="rgb(248,109,47)" rx="2" ry="2" />
+<text text-anchor="" x="13.09" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@17 (5,312 microseconds, 0.10%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@17 (5,312 microseconds, 0.10%)</title><a xlink:href="Encode-pm-8-line.html#17" target="_top"><rect x="1127.2" y="145" width="1.2" height="15.0" fill="rgb(238,148,36)" rx="2" ry="2" />
+<text text-anchor="" x="1130.21" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Context::Info::serialize_fuzzy (660 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Context::Info::serialize_fuzzy (660 microseconds, 0.01%)</title><a xlink:href="Info-pm-76-line.html#168" target="_top"><rect x="10.4" y="161" width="0.2" height="15.0" fill="rgb(250,99,50)" rx="2" ry="2" />
+<text text-anchor="" x="13.43" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::CORE:match (507 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::CORE:match (507 microseconds, 0.01%)</title><a xlink:href="Core-pm-7-line.html#Mail__SpamAssassin__PDF__Core__CORE_match" target="_top"><rect x="12.8" y="33" width="0.1" height="15.0" fill="rgb(242,99,41)" rx="2" ry="2" />
+<text text-anchor="" x="15.80" y="43.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (1,131 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (1,131 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="1120.2" y="145" width="0.3" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1123.22" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_array (458 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_array (458 microseconds, 0.01%)</title><a xlink:href="Core-pm-7-line.html#96" target="_top"><rect x="1120.4" y="129" width="0.1" height="15.0" fill="rgb(239,99,37)" rx="2" ry="2" />
+<text text-anchor="" x="1123.37" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (465 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (465 microseconds, 0.01%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="1120.5" y="145" width="0.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1123.51" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (933 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (933 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="12.7" y="49" width="0.2" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.71" y="59.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Types::Serialiser::BooleanBase::BEGIN@116 (1,956 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Types::Serialiser::BooleanBase::BEGIN@116 (1,956 microseconds, 0.04%)</title><a xlink:href="Types-Serialiser-pm-69-line.html#116" target="_top"><rect x="1169.1" y="81" width="0.5" height="15.0" fill="rgb(241,185,40)" rx="2" ry="2" />
+<text text-anchor="" x="1172.13" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_get_stream_data (23,456 microseconds, 0.45%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_get_stream_data (23,456 microseconds, 0.45%)</title><a xlink:href="Parser-pm-6-line.html#546" target="_top"><rect x="1114.7" y="129" width="5.4" height="15.0" fill="rgb(235,99,33)" rx="2" ry="2" />
+<text text-anchor="" x="1117.75" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Uncompress::Gunzip::BEGIN@16 (582 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Uncompress::Gunzip::BEGIN@16 (582 microseconds, 0.01%)</title><a xlink:href="IO-Uncompress-Gunzip-pm-52-line.html#16" target="_top"><rect x="1158.9" y="129" width="0.2" height="15.0" fill="rgb(239,163,38)" rx="2" ry="2" />
+<text text-anchor="" x="1161.94" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Handle::BEGIN@266 (1,836 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Handle::BEGIN@266 (1,836 microseconds, 0.04%)</title><a xlink:href="IO-Handle-pm-30-line.html#266" target="_top"><rect x="1160.2" y="129" width="0.4" height="15.0" fill="rgb(235,163,33)" rx="2" ry="2" />
+<text text-anchor="" x="1163.18" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Base::Common::BEGIN@114 (2,745 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Base::Common::BEGIN@114 (2,745 microseconds, 0.05%)</title><a xlink:href="IO-Compress-Base-Common-pm-37-line.html#114" target="_top"><rect x="1141.0" y="129" width="0.6" height="15.0" fill="rgb(245,163,44)" rx="2" ry="2" />
+<text text-anchor="" x="1143.95" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('File::GlobMapper::BEGIN@10 (3,767 microseconds, 0.07%)')" onmouseout="c()" onclick="zoom(this)">
+<title>File::GlobMapper::BEGIN@10 (3,767 microseconds, 0.07%)</title><a xlink:href="File-GlobMapper-pm-38-line.html#10" target="_top"><rect x="1143.5" y="113" width="0.9" height="15.0" fill="rgb(232,199,30)" rx="2" ry="2" />
+<text text-anchor="" x="1146.55" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::format_arg (1,232 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::format_arg (1,232 microseconds, 0.02%)</title><a xlink:href="Carp-pm-12-line.html#398" target="_top"><rect x="10.1" y="97" width="0.3" height="15.0" fill="rgb(244,109,43)" rx="2" ry="2" />
+<text text-anchor="" x="13.11" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,755 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,755 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1170.9" y="113" width="0.4" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1173.86" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (626 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (626 microseconds, 0.01%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1132.0" y="113" width="0.1" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1134.96" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (801 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (801 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="12.2" y="97" width="0.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.15" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::ASCII85Decode::BEGIN@2 (4,069 microseconds, 0.08%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::ASCII85Decode::BEGIN@2 (4,069 microseconds, 0.08%)</title><a xlink:href="ASCII85Decode-pm-57-line.html#2" target="_top"><rect x="1162.7" y="161" width="0.9" height="15.0" fill="rgb(240,99,39)" rx="2" ry="2" />
+<text text-anchor="" x="1165.66" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::as_heavy (2,141 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::as_heavy (2,141 microseconds, 0.04%)</title><a xlink:href="Exporter-pm-11-line.html#15" target="_top"><rect x="1131.5" y="81" width="0.4" height="15.0" fill="rgb(243,94,42)" rx="2" ry="2" />
+<text text-anchor="" x="1134.45" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Raw::Zlib::inflateStream::inflate (15,224 microseconds, 0.29%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Raw::Zlib::inflateStream::inflate (15,224 microseconds, 0.29%)</title><a xlink:href="Compress-Raw-Zlib-pm-42-line.html#Compress__Raw__Zlib__inflateStream__inflate" target="_top"><rect x="1116.0" y="81" width="3.5" height="15.0" fill="rgb(245,165,45)" rx="2" ry="2" />
+<text text-anchor="" x="1119.02" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::import (454 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::import (454 microseconds, 0.01%)</title><a xlink:href="Exporter-pm-11-line.html#28" target="_top"><rect x="1162.4" y="145" width="0.1" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1165.39" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::import (600 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::import (600 microseconds, 0.01%)</title><a xlink:href="Exporter-pm-11-line.html#28" target="_top"><rect x="1144.0" y="81" width="0.2" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1147.02" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('DynaLoader::BEGIN@111 (3,036 microseconds, 0.06%)')" onmouseout="c()" onclick="zoom(this)">
+<title>DynaLoader::BEGIN@111 (3,036 microseconds, 0.06%)</title><a xlink:href="JSON-XS-pm-67-line.html#111" target="_top"><rect x="1170.1" y="81" width="0.7" height="15.0" fill="rgb(233,159,30)" rx="2" ry="2" />
+<text text-anchor="" x="1173.14" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_parse_pages (4,862,479 microseconds, 93.87%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_parse_pages (4,862,479 microseconds, 93.87%)</title><a xlink:href="Parser-pm-6-line.html#237" target="_top"><rect x="12.4" y="161" width="1107.7" height="15.0" fill="rgb(239,99,37)" rx="2" ry="2" />
+<text text-anchor="" x="15.44" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Mail::SpamAssassin::PDF::Parser::_parse_pages</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (573 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (573 microseconds, 0.01%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1132.1" y="129" width="0.1" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1135.10" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Escapes::BEGIN@2 (745 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Escapes::BEGIN@2 (745 microseconds, 0.01%)</title><a xlink:href="Pod-Escapes-pm-86-line.html#2" target="_top"><rect x="1185.0" y="129" width="0.2" height="15.0" fill="rgb(240,212,39)" rx="2" ry="2" />
+<text text-anchor="" x="1187.99" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (473 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (473 microseconds, 0.01%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="12.9" y="65" width="0.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.92" y="75.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::File::BEGIN@132 (2,033 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::File::BEGIN@132 (2,033 microseconds, 0.04%)</title><a xlink:href="IO-File-pm-47-line.html#132" target="_top"><rect x="1151.0" y="81" width="0.4" height="15.0" fill="rgb(246,163,45)" rx="2" ry="2" />
+<text text-anchor="" x="1153.98" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('main::BEGIN@8 (2,286 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>main::BEGIN@8 (2,286 microseconds, 0.04%)</title><a xlink:href="info-pl-1-line.html#8" target="_top"><rect x="1175.0" y="193" width="0.5" height="15.0" fill="rgb(230,83,28)" rx="2" ry="2" />
+<text text-anchor="" x="1178.00" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (2,148 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (2,148 microseconds, 0.04%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="12.5" y="113" width="0.5" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.54" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('lib::import (483 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>lib::import (483 microseconds, 0.01%)</title><a xlink:href="lib-pm-2-line.html#18" target="_top"><rect x="1122.9" y="177" width="0.1" height="15.0" fill="rgb(238,129,36)" rx="2" ry="2" />
+<text text-anchor="" x="1125.87" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::BEGIN@7 (41,441 microseconds, 0.80%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::BEGIN@7 (41,441 microseconds, 0.80%)</title><a xlink:href="Parser-pm-6-line.html#7" target="_top"><rect x="1164.0" y="177" width="9.4" height="15.0" fill="rgb(232,99,29)" rx="2" ry="2" />
+<text text-anchor="" x="1166.99" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::export (2,147 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::export (2,147 microseconds, 0.04%)</title><a xlink:href="Exporter-pm-11-line.html#24" target="_top"><rect x="1131.4" y="97" width="0.5" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1134.45" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::croak (1,575 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::croak (1,575 microseconds, 0.03%)</title><a xlink:href="Carp-pm-12-line.html#291" target="_top"><rect x="10.1" y="177" width="0.3" height="15.0" fill="rgb(230,109,28)" rx="2" ry="2" />
+<text text-anchor="" x="13.07" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::RawDeflate::BEGIN@11 (2,309 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::RawDeflate::BEGIN@11 (2,309 microseconds, 0.04%)</title><a xlink:href="IO-Compress-RawDeflate-pm-45-line.html#11" target="_top"><rect x="1147.8" y="113" width="0.6" height="15.0" fill="rgb(231,163,28)" rx="2" ry="2" />
+<text text-anchor="" x="1150.85" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Config::BEGIN@10 (4,514 microseconds, 0.09%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Config::BEGIN@10 (4,514 microseconds, 0.09%)</title><a xlink:href="Config-pm-3-line.html#10" target="_top"><rect x="1121.4" y="161" width="1.1" height="15.0" fill="rgb(232,162,30)" rx="2" ry="2" />
+<text text-anchor="" x="1124.43" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::CORE:match (4,590,902 microseconds, 88.63%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::CORE:match (4,590,902 microseconds, 88.63%)</title><a xlink:href="Core-pm-7-line.html#Mail__SpamAssassin__PDF__Core__CORE_match" target="_top"><rect x="67.5" y="113" width="1045.8" height="15.0" fill="rgb(242,99,41)" rx="2" ry="2" />
+<text text-anchor="" x="70.52" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Mail::SpamAssassin::PDF::Core::CORE:match</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::Alias::define_alias (502 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::Alias::define_alias (502 microseconds, 0.01%)</title><a xlink:href="Encode-Alias-pm-18-line.html#78" target="_top"><rect x="1129.0" y="113" width="0.1" height="15.0" fill="rgb(230,148,27)" rx="2" ry="2" />
+<text text-anchor="" x="1132.04" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('File::Spec::Unix::BEGIN@4 (11,153 microseconds, 0.22%)')" onmouseout="c()" onclick="zoom(this)">
+<title>File::Spec::Unix::BEGIN@4 (11,153 microseconds, 0.22%)</title><a xlink:href="File-Spec-Unix-pm-81-line.html#4" target="_top"><rect x="1178.0" y="161" width="2.6" height="15.0" fill="rgb(237,199,35)" rx="2" ry="2" />
+<text text-anchor="" x="1181.04" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::Heavy::heavy_export (487 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::Heavy::heavy_export (487 microseconds, 0.01%)</title><a xlink:href="Exporter-Heavy-pm-22-line.html#39" target="_top"><rect x="1148.6" y="65" width="0.1" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1151.61" y="75.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,619 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,619 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1145.7" y="129" width="0.4" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1148.75" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (445 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (445 microseconds, 0.01%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="12.0" y="145" width="0.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="14.96" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@13 (25,239 microseconds, 0.49%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@13 (25,239 microseconds, 0.49%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#13" target="_top"><rect x="1153.4" y="145" width="5.7" height="15.0" fill="rgb(244,165,43)" rx="2" ry="2" />
+<text text-anchor="" x="1156.36" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::import (2,704 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::import (2,704 microseconds, 0.05%)</title><a xlink:href="Exporter-pm-11-line.html#28" target="_top"><rect x="1131.3" y="113" width="0.6" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1134.32" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (976 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (976 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="12.1" y="129" width="0.2" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.11" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (4,463 microseconds, 0.09%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (4,463 microseconds, 0.09%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1169.8" y="97" width="1.0" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1172.82" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Gzip::BEGIN@16 (2,373 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Gzip::BEGIN@16 (2,373 microseconds, 0.05%)</title><a xlink:href="IO-Compress-Gzip-pm-44-line.html#16" target="_top"><rect x="1152.7" y="129" width="0.6" height="15.0" fill="rgb(239,163,38)" rx="2" ry="2" />
+<text text-anchor="" x="1155.72" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::import (717 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::import (717 microseconds, 0.01%)</title><a xlink:href="Exporter-pm-11-line.html#28" target="_top"><rect x="1148.6" y="81" width="0.1" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1151.56" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_dereference (2,191 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_dereference (2,191 microseconds, 0.04%)</title><a xlink:href="Parser-pm-6-line.html#517" target="_top"><rect x="12.5" y="145" width="0.5" height="15.0" fill="rgb(251,99,51)" rx="2" ry="2" />
+<text text-anchor="" x="15.53" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@8 (4,038 microseconds, 0.08%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@8 (4,038 microseconds, 0.08%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#8" target="_top"><rect x="1161.5" y="145" width="0.9" height="15.0" fill="rgb(230,165,28)" rx="2" ry="2" />
+<text text-anchor="" x="1164.47" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (1,297 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (1,297 microseconds, 0.03%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="1120.2" y="161" width="0.3" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1123.18" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (858 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (858 microseconds, 0.02%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1161.2" y="113" width="0.2" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1164.25" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Context::Info::BEGIN@4 (1,270 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Context::Info::BEGIN@4 (1,270 microseconds, 0.02%)</title><a xlink:href="Info-pm-76-line.html#4" target="_top"><rect x="1174.7" y="177" width="0.3" height="15.0" fill="rgb(237,99,35)" rx="2" ry="2" />
+<text text-anchor="" x="1177.66" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@54 (1,275 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@54 (1,275 microseconds, 0.02%)</title><a xlink:href="Encode-pm-8-line.html#54" target="_top"><rect x="1129.2" y="145" width="0.2" height="15.0" fill="rgb(238,148,37)" rx="2" ry="2" />
+<text text-anchor="" x="1132.15" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_get_obj (1,043 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_get_obj (1,043 microseconds, 0.02%)</title><a xlink:href="Parser-pm-6-line.html#482" target="_top"><rect x="12.1" y="145" width="0.2" height="15.0" fill="rgb(231,99,29)" rx="2" ry="2" />
+<text text-anchor="" x="15.10" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Data::Dumper::BEGIN@25 (1,569 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Data::Dumper::BEGIN@25 (1,569 microseconds, 0.03%)</title><a xlink:href="Data-Dumper-pm-27-line.html#25" target="_top"><rect x="1137.1" y="145" width="0.3" height="15.0" fill="rgb(240,94,38)" rx="2" ry="2" />
+<text text-anchor="" x="1140.07" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('constant::BEGIN@4 (1,476 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>constant::BEGIN@4 (1,476 microseconds, 0.03%)</title><a xlink:href="constant-pm-9-line.html#4" target="_top"><rect x="1132.8" y="129" width="0.4" height="15.0" fill="rgb(237,146,35)" rx="2" ry="2" />
+<text text-anchor="" x="1135.82" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::parse (4,875,349 microseconds, 94.12%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::parse (4,875,349 microseconds, 94.12%)</title><a xlink:href="Parser-pm-6-line.html#61" target="_top"><rect x="10.0" y="193" width="1110.6" height="15.0" fill="rgb(243,99,42)" rx="2" ry="2" />
+<text text-anchor="" x="13.03" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Mail::SpamAssassin::PDF::Parser::parse</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::BEGIN@5 (109,777 microseconds, 2.12%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::BEGIN@5 (109,777 microseconds, 2.12%)</title><a xlink:href="Parser-pm-6-line.html#5" target="_top"><rect x="1137.5" y="177" width="25.0" height="15.0" fill="rgb(235,99,33)" rx="2" ry="2" />
+<text text-anchor="" x="1140.48" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >M..</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@12 (31,774 microseconds, 0.61%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@12 (31,774 microseconds, 0.61%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#12" target="_top"><rect x="1146.1" y="145" width="7.3" height="15.0" fill="rgb(246,165,45)" rx="2" ry="2" />
+<text text-anchor="" x="1149.12" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,711 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,711 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1180.2" y="145" width="0.4" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1183.19" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,301 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,301 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1133.2" y="129" width="0.3" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1136.23" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_get_obj (2,402 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_get_obj (2,402 microseconds, 0.05%)</title><a xlink:href="Parser-pm-6-line.html#482" target="_top"><rect x="1119.5" y="97" width="0.6" height="15.0" fill="rgb(231,99,29)" rx="2" ry="2" />
+<text text-anchor="" x="1122.54" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_parse_xref (581 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_parse_xref (581 microseconds, 0.01%)</title><a xlink:href="Parser-pm-6-line.html#130" target="_top"><rect x="1120.5" y="161" width="0.1" height="15.0" fill="rgb(245,99,44)" rx="2" ry="2" />
+<text text-anchor="" x="1123.49" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@10 (24,836 microseconds, 0.48%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@10 (24,836 microseconds, 0.48%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#10" target="_top"><rect x="1138.9" y="145" width="5.7" height="15.0" fill="rgb(232,165,30)" rx="2" ry="2" />
+<text text-anchor="" x="1141.91" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::RawDeflate::BEGIN@11 (1,375 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::RawDeflate::BEGIN@11 (1,375 microseconds, 0.03%)</title><a xlink:href="IO-Compress-RawDeflate-pm-45-line.html#11" target="_top"><rect x="1148.4" y="113" width="0.3" height="15.0" fill="rgb(231,163,28)" rx="2" ry="2" />
+<text text-anchor="" x="1151.41" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::BEGIN@4 (56,986 microseconds, 1.10%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::BEGIN@4 (56,986 microseconds, 1.10%)</title><a xlink:href="Parser-pm-6-line.html#4" target="_top"><rect x="1124.5" y="177" width="13.0" height="15.0" fill="rgb(237,99,35)" rx="2" ry="2" />
+<text text-anchor="" x="1127.50" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@9 (1,340 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@9 (1,340 microseconds, 0.03%)</title><a xlink:href="Encode-pm-8-line.html#9" target="_top"><rect x="1133.2" y="145" width="0.3" height="15.0" fill="rgb(228,148,26)" rx="2" ry="2" />
+<text text-anchor="" x="1136.22" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@6 (18,097 microseconds, 0.35%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@6 (18,097 microseconds, 0.35%)</title><a xlink:href="Decrypt-pm-59-line.html#6" target="_top"><rect x="1167.1" y="161" width="4.2" height="15.0" fill="rgb(233,99,31)" rx="2" ry="2" />
+<text text-anchor="" x="1170.14" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (2,005 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (2,005 microseconds, 0.04%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="1119.6" y="65" width="0.5" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1122.62" y="75.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Storable::BEGIN@42 (1,244 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Storable::BEGIN@42 (1,244 microseconds, 0.02%)</title><a xlink:href="Storable-pm-20-line.html#42" target="_top"><rect x="1130.1" y="129" width="0.2" height="15.0" fill="rgb(243,166,42)" rx="2" ry="2" />
+<text text-anchor="" x="1133.06" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Simple::BEGIN@9 (11,257 microseconds, 0.22%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Simple::BEGIN@9 (11,257 microseconds, 0.22%)</title><a xlink:href="Pod-Simple-pm-85-line.html#9" target="_top"><rect x="1185.2" y="145" width="2.6" height="15.0" fill="rgb(228,212,26)" rx="2" ry="2" />
+<text text-anchor="" x="1188.25" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_parse_pages (4,862,938 microseconds, 93.88%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_parse_pages (4,862,938 microseconds, 93.88%)</title><a xlink:href="Parser-pm-6-line.html#237" target="_top"><rect x="12.3" y="177" width="1107.8" height="15.0" fill="rgb(239,99,37)" rx="2" ry="2" />
+<text text-anchor="" x="15.33" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Mail::SpamAssassin::PDF::Parser::_parse_pages</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::CORE:match (924 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::CORE:match (924 microseconds, 0.02%)</title><a xlink:href="Core-pm-7-line.html#Mail__SpamAssassin__PDF__Core__CORE_match" target="_top"><rect x="1119.9" y="33" width="0.2" height="15.0" fill="rgb(242,99,41)" rx="2" ry="2" />
+<text text-anchor="" x="1122.87" y="43.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Adapter::Deflate::BEGIN@8 (738 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Adapter::Deflate::BEGIN@8 (738 microseconds, 0.01%)</title><a xlink:href="IO-Compress-Adapter-Deflate-pm-49-line.html#8" target="_top"><rect x="1148.6" y="97" width="0.1" height="15.0" fill="rgb(230,163,28)" rx="2" ry="2" />
+<text text-anchor="" x="1151.55" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::RawDeflate::BEGIN@9 (12,342 microseconds, 0.24%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::RawDeflate::BEGIN@9 (12,342 microseconds, 0.24%)</title><a xlink:href="IO-Compress-RawDeflate-pm-45-line.html#9" target="_top"><rect x="1148.8" y="113" width="2.8" height="15.0" fill="rgb(228,163,26)" rx="2" ry="2" />
+<text text-anchor="" x="1151.80" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@53 (3,126 microseconds, 0.06%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@53 (3,126 microseconds, 0.06%)</title><a xlink:href="Encode-pm-8-line.html#53" target="_top"><rect x="1128.4" y="145" width="0.8" height="15.0" fill="rgb(240,148,39)" rx="2" ry="2" />
+<text text-anchor="" x="1131.44" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Context::Info::serialize_fuzzy (577 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Context::Info::serialize_fuzzy (577 microseconds, 0.01%)</title><a xlink:href="Info-pm-76-line.html#168" target="_top"><rect x="10.5" y="145" width="0.1" height="15.0" fill="rgb(250,99,50)" rx="2" ry="2" />
+<text text-anchor="" x="13.45" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('lib::BEGIN@6 (8,123 microseconds, 0.16%)')" onmouseout="c()" onclick="zoom(this)">
+<title>lib::BEGIN@6 (8,123 microseconds, 0.16%)</title><a xlink:href="lib-pm-2-line.html#6" target="_top"><rect x="1121.0" y="177" width="1.9" height="15.0" fill="rgb(233,129,31)" rx="2" ry="2" />
+<text text-anchor="" x="1124.01" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::CORE:open (774 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::CORE:open (774 microseconds, 0.01%)</title><a xlink:href="Parser-pm-6-line.html#Mail__SpamAssassin__PDF__Parser__CORE_open" target="_top"><rect x="1113.4" y="129" width="0.2" height="15.0" fill="rgb(250,99,49)" rx="2" ry="2" />
+<text text-anchor="" x="1116.38" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@7 (9,303 microseconds, 0.18%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@7 (9,303 microseconds, 0.18%)</title><a xlink:href="Decrypt-pm-59-line.html#7" target="_top"><rect x="1171.3" y="161" width="2.1" height="15.0" fill="rgb(232,99,29)" rx="2" ry="2" />
+<text text-anchor="" x="1174.26" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('all (5,180,056 microseconds, 100%)')" onmouseout="c()" onclick="zoom(this)">
+<title>all (5,180,056 microseconds, 100%)</title><rect x="10.0" y="209" width="1180.0" height="15.0" fill="rgb(255,230,55)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="219.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::CORE:match (5,998 microseconds, 0.12%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::CORE:match (5,998 microseconds, 0.12%)</title><a xlink:href="Parser-pm-6-line.html#Mail__SpamAssassin__PDF__Parser__CORE_match" target="_top"><rect x="10.6" y="177" width="1.3" height="15.0" fill="rgb(242,99,41)" rx="2" ry="2" />
+<text text-anchor="" x="13.58" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Storable::BEGIN@81 (7,650 microseconds, 0.15%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Storable::BEGIN@81 (7,650 microseconds, 0.15%)</title><a xlink:href="Storable-pm-20-line.html#81" target="_top"><rect x="1130.4" y="129" width="1.7" height="15.0" fill="rgb(235,166,33)" rx="2" ry="2" />
+<text text-anchor="" x="1133.36" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_parse_xref (2,301 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_parse_xref (2,301 microseconds, 0.04%)</title><a xlink:href="Parser-pm-6-line.html#130" target="_top"><rect x="1120.1" y="177" width="0.5" height="15.0" fill="rgb(245,99,44)" rx="2" ry="2" />
+<text text-anchor="" x="1123.10" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Simple::LinkSection::BEGIN@9 (8,370 microseconds, 0.16%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Simple::LinkSection::BEGIN@9 (8,370 microseconds, 0.16%)</title><a xlink:href="Pod-Simple-LinkSection-pm-87-line.html#9" target="_top"><rect x="1185.9" y="129" width="1.9" height="15.0" fill="rgb(228,212,26)" rx="2" ry="2" />
+<text text-anchor="" x="1188.90" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('main::CORE:readline (2,631 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>main::CORE:readline (2,631 microseconds, 0.05%)</title><a xlink:href="info-pl-1-line.html#main__CORE_readline" target="_top"><rect x="1188.0" y="193" width="0.6" height="15.0" fill="rgb(246,83,46)" rx="2" ry="2" />
+<text text-anchor="" x="1190.95" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Gzip::BEGIN@15 (4,465 microseconds, 0.09%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Gzip::BEGIN@15 (4,465 microseconds, 0.09%)</title><a xlink:href="IO-Compress-Gzip-pm-44-line.html#15" target="_top"><rect x="1151.7" y="129" width="1.0" height="15.0" fill="rgb(241,163,40)" rx="2" ry="2" />
+<text text-anchor="" x="1154.71" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('File::Glob::import (635 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>File::Glob::import (635 microseconds, 0.01%)</title><a xlink:href="File-Glob-pm-39-line.html#40" target="_top"><rect x="1144.0" y="97" width="0.2" height="15.0" fill="rgb(238,199,36)" rx="2" ry="2" />
+<text text-anchor="" x="1147.01" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Text::BEGIN@26 (25,669 microseconds, 0.50%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Text::BEGIN@26 (25,669 microseconds, 0.50%)</title><a xlink:href="Pod-Text-pm-84-line.html#26" target="_top"><rect x="1182.0" y="161" width="5.9" height="15.0" fill="rgb(238,212,37)" rx="2" ry="2" />
+<text text-anchor="" x="1185.02" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@5 (2,608 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@5 (2,608 microseconds, 0.05%)</title><a xlink:href="Decrypt-pm-59-line.html#5" target="_top"><rect x="1166.5" y="161" width="0.6" height="15.0" fill="rgb(235,99,33)" rx="2" ry="2" />
+<text text-anchor="" x="1169.55" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (2,099 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (2,099 microseconds, 0.04%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="1119.6" y="81" width="0.5" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1122.60" y="91.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_get_obj (2,175 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_get_obj (2,175 microseconds, 0.04%)</title><a xlink:href="Parser-pm-6-line.html#482" target="_top"><rect x="12.5" y="129" width="0.5" height="15.0" fill="rgb(231,99,29)" rx="2" ry="2" />
+<text text-anchor="" x="15.53" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::BEGIN@6 (11,789 microseconds, 0.23%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::BEGIN@6 (11,789 microseconds, 0.23%)</title><a xlink:href="Core-pm-7-line.html#6" target="_top"><rect x="1134.8" y="161" width="2.7" height="15.0" fill="rgb(233,99,31)" rx="2" ry="2" />
+<text text-anchor="" x="1137.80" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_dereference (2,571 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_dereference (2,571 microseconds, 0.05%)</title><a xlink:href="Parser-pm-6-line.html#517" target="_top"><rect x="1119.5" y="113" width="0.6" height="15.0" fill="rgb(251,99,51)" rx="2" ry="2" />
+<text text-anchor="" x="1122.51" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Config::BEGIN@9 (1,678 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Config::BEGIN@9 (1,678 microseconds, 0.03%)</title><a xlink:href="Config-pm-3-line.html#9" target="_top"><rect x="1122.5" y="161" width="0.4" height="15.0" fill="rgb(228,162,26)" rx="2" ry="2" />
+<text text-anchor="" x="1125.47" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Uncompress::Adapter::Inflate::BEGIN@7 (442 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Uncompress::Adapter::Inflate::BEGIN@7 (442 microseconds, 0.01%)</title><a xlink:href="IO-Uncompress-Adapter-Inflate-pm-55-line.html#7" target="_top"><rect x="1158.5" y="97" width="0.1" height="15.0" fill="rgb(232,163,29)" rx="2" ry="2" />
+<text text-anchor="" x="1161.54" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Base::BEGIN@11 (4,727 microseconds, 0.09%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Base::BEGIN@11 (4,727 microseconds, 0.09%)</title><a xlink:href="IO-Compress-Base-pm-46-line.html#11" target="_top"><rect x="1150.4" y="97" width="1.1" height="15.0" fill="rgb(231,163,28)" rx="2" ry="2" />
+<text text-anchor="" x="1153.38" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Crypt::Cipher::BEGIN@9 (15,247 microseconds, 0.29%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Crypt::Cipher::BEGIN@9 (15,247 microseconds, 0.29%)</title><a xlink:href="Crypt-Cipher-pm-65-line.html#9" target="_top"><rect x="1167.8" y="129" width="3.5" height="15.0" fill="rgb(228,150,26)" rx="2" ry="2" />
+<text text-anchor="" x="1170.79" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@56 (12,240 microseconds, 0.24%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@56 (12,240 microseconds, 0.24%)</title><a xlink:href="Encode-pm-8-line.html#56" target="_top"><rect x="1129.4" y="145" width="2.8" height="15.0" fill="rgb(235,148,33)" rx="2" ry="2" />
+<text text-anchor="" x="1132.44" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (4,774,364 microseconds, 92.17%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (4,774,364 microseconds, 92.17%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="25.7" y="129" width="1087.6" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="28.73" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Mail::SpamAssassin::PDF::Core::get_primitive</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::uncompress (20,217 microseconds, 0.39%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::uncompress (20,217 microseconds, 0.39%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#338" target="_top"><rect x="1114.9" y="97" width="4.6" height="15.0" fill="rgb(237,165,35)" rx="2" ry="2" />
+<text text-anchor="" x="1117.89" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::BEGIN@4 (43,112 microseconds, 0.83%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::BEGIN@4 (43,112 microseconds, 0.83%)</title><a xlink:href="Core-pm-7-line.html#4" target="_top"><rect x="1125.0" y="161" width="9.8" height="15.0" fill="rgb(237,99,35)" rx="2" ry="2" />
+<text text-anchor="" x="1127.96" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_get_obj (498 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_get_obj (498 microseconds, 0.01%)</title><a xlink:href="Parser-pm-6-line.html#482" target="_top"><rect x="11.9" y="177" width="0.2" height="15.0" fill="rgb(231,99,29)" rx="2" ry="2" />
+<text text-anchor="" x="14.95" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@4 (8,579 microseconds, 0.17%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::Decrypt::BEGIN@4 (8,579 microseconds, 0.17%)</title><a xlink:href="Decrypt-pm-59-line.html#4" target="_top"><rect x="1164.6" y="161" width="1.9" height="15.0" fill="rgb(237,99,35)" rx="2" ry="2" />
+<text text-anchor="" x="1167.59" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::ASCII85Decode::BEGIN@4 (1,714 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::ASCII85Decode::BEGIN@4 (1,714 microseconds, 0.03%)</title><a xlink:href="ASCII85Decode-pm-57-line.html#4" target="_top"><rect x="1163.6" y="161" width="0.4" height="15.0" fill="rgb(237,99,35)" rx="2" ry="2" />
+<text text-anchor="" x="1166.60" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Digest::SHA::BEGIN@9 (2,818 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Digest::SHA::BEGIN@9 (2,818 microseconds, 0.05%)</title><a xlink:href="Digest-SHA-pm-73-line.html#9" target="_top"><rect x="1172.4" y="145" width="0.6" height="15.0" fill="rgb(228,113,26)" rx="2" ry="2" />
+<text text-anchor="" x="1175.36" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Pod::Usage::BEGIN@25 (31,985 microseconds, 0.62%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Pod::Usage::BEGIN@25 (31,985 microseconds, 0.62%)</title><a xlink:href="Pod-Usage-pm-79-line.html#25" target="_top"><rect x="1180.6" y="177" width="7.3" height="15.0" fill="rgb(240,212,38)" rx="2" ry="2" />
+<text text-anchor="" x="1183.58" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@11 (6,789 microseconds, 0.13%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@11 (6,789 microseconds, 0.13%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#11" target="_top"><rect x="1144.6" y="145" width="1.5" height="15.0" fill="rgb(231,165,28)" rx="2" ry="2" />
+<text text-anchor="" x="1147.57" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::BEGIN@169 (1,214 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::BEGIN@169 (1,214 microseconds, 0.02%)</title><a xlink:href="Carp-pm-12-line.html#169" target="_top"><rect x="1128.0" y="129" width="0.3" height="15.0" fill="rgb(231,109,28)" rx="2" ry="2" />
+<text text-anchor="" x="1131.03" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('JSON::XS::BEGIN@90 (933 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>JSON::XS::BEGIN@90 (933 microseconds, 0.02%)</title><a xlink:href="JSON-XS-pm-67-line.html#90" target="_top"><rect x="1169.6" y="97" width="0.2" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text text-anchor="" x="1172.59" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::BEGIN@8 (2,589 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::BEGIN@8 (2,589 microseconds, 0.05%)</title><a xlink:href="Parser-pm-6-line.html#8" target="_top"><rect x="1173.4" y="177" width="0.6" height="15.0" fill="rgb(230,99,28)" rx="2" ry="2" />
+<text text-anchor="" x="1176.43" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('main::BEGIN@2 (10,333 microseconds, 0.20%)')" onmouseout="c()" onclick="zoom(this)">
+<title>main::BEGIN@2 (10,333 microseconds, 0.20%)</title><a xlink:href="info-pl-1-line.html#2" target="_top"><rect x="1120.6" y="193" width="2.4" height="15.0" fill="rgb(240,83,39)" rx="2" ry="2" />
+<text text-anchor="" x="1123.62" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::CORE:print (5,100 microseconds, 0.10%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::CORE:print (5,100 microseconds, 0.10%)</title><a xlink:href="Parser-pm-6-line.html#Mail__SpamAssassin__PDF__Parser__CORE_print" target="_top"><rect x="1113.6" y="129" width="1.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1116.55" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::BEGIN@7 (4,291 microseconds, 0.08%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::BEGIN@7 (4,291 microseconds, 0.08%)</title><a xlink:href="Encode-pm-8-line.html#7" target="_top"><rect x="1132.2" y="145" width="1.0" height="15.0" fill="rgb(232,148,29)" rx="2" ry="2" />
+<text text-anchor="" x="1135.24" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (1,652 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (1,652 microseconds, 0.03%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="1119.7" y="49" width="0.4" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="1122.70" y="59.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Uncompress::RawInflate::BEGIN@12 (5,319 microseconds, 0.10%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Uncompress::RawInflate::BEGIN@12 (5,319 microseconds, 0.10%)</title><a xlink:href="IO-Uncompress-RawInflate-pm-53-line.html#12" target="_top"><rect x="1157.5" y="113" width="1.2" height="15.0" fill="rgb(246,163,45)" rx="2" ry="2" />
+<text text-anchor="" x="1160.47" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('main::BEGIN@9 (54,206 microseconds, 1.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>main::BEGIN@9 (54,206 microseconds, 1.05%)</title><a xlink:href="info-pl-1-line.html#9" target="_top"><rect x="1175.5" y="193" width="12.4" height="15.0" fill="rgb(228,83,26)" rx="2" ry="2" />
+<text text-anchor="" x="1178.52" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Compress::Gzip::BEGIN@11 (20,376 microseconds, 0.39%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Compress::Gzip::BEGIN@11 (20,376 microseconds, 0.39%)</title><a xlink:href="IO-Compress-Gzip-pm-44-line.html#11" target="_top"><rect x="1147.0" y="129" width="4.6" height="15.0" fill="rgb(231,163,28)" rx="2" ry="2" />
+<text text-anchor="" x="1149.97" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,514 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,514 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1137.1" y="129" width="0.3" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1140.09" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('parent::import (1,340 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>parent::import (1,340 microseconds, 0.03%)</title><a xlink:href="parent-pm-23-line.html#6" target="_top"><rect x="1133.9" y="129" width="0.3" height="15.0" fill="rgb(238,149,36)" rx="2" ry="2" />
+<text text-anchor="" x="1136.90" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,605 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,605 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1173.0" y="145" width="0.4" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1176.02" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_primitive (460 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_primitive (460 microseconds, 0.01%)</title><a xlink:href="Core-pm-7-line.html#139" target="_top"><rect x="12.0" y="161" width="0.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="14.96" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Context::Info::parse_begin (683 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Context::Info::parse_begin (683 microseconds, 0.01%)</title><a xlink:href="Info-pm-76-line.html#34" target="_top"><rect x="10.4" y="177" width="0.2" height="15.0" fill="rgb(243,99,42)" rx="2" ry="2" />
+<text text-anchor="" x="13.43" y="187.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('IO::Handle::BEGIN@268 (2,380 microseconds, 0.05%)')" onmouseout="c()" onclick="zoom(this)">
+<title>IO::Handle::BEGIN@268 (2,380 microseconds, 0.05%)</title><a xlink:href="IO-Handle-pm-30-line.html#268" target="_top"><rect x="1160.9" y="129" width="0.5" height="15.0" fill="rgb(232,163,29)" rx="2" ry="2" />
+<text text-anchor="" x="1163.90" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@464 (440 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@464 (440 microseconds, 0.01%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#464" target="_top"><rect x="1159.1" y="145" width="0.1" height="15.0" fill="rgb(237,165,36)" rx="2" ry="2" />
+<text text-anchor="" x="1162.14" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('main::BEGIN@6 (4,094 microseconds, 0.08%)')" onmouseout="c()" onclick="zoom(this)">
+<title>main::BEGIN@6 (4,094 microseconds, 0.08%)</title><a xlink:href="info-pl-1-line.html#6" target="_top"><rect x="1174.1" y="193" width="0.9" height="15.0" fill="rgb(233,83,31)" rx="2" ry="2" />
+<text text-anchor="" x="1177.05" y="203.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Compress::Zlib::BEGIN@7 (9,113 microseconds, 0.18%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Compress::Zlib::BEGIN@7 (9,113 microseconds, 0.18%)</title><a xlink:href="Compress-Zlib-pm-29-line.html#7" target="_top"><rect x="1159.4" y="145" width="2.1" height="15.0" fill="rgb(232,165,29)" rx="2" ry="2" />
+<text text-anchor="" x="1162.39" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::FlateDecode::decode (20,283 microseconds, 0.39%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::FlateDecode::decode (20,283 microseconds, 0.39%)</title><a xlink:href="FlateDecode-pm-28-line.html#19" target="_top"><rect x="1114.9" y="113" width="4.6" height="15.0" fill="rgb(250,99,49)" rx="2" ry="2" />
+<text text-anchor="" x="1117.87" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('CryptX::BEGIN@13 (12,048 microseconds, 0.23%)')" onmouseout="c()" onclick="zoom(this)">
+<title>CryptX::BEGIN@13 (12,048 microseconds, 0.23%)</title><a xlink:href="CryptX-pm-66-line.html#13" target="_top"><rect x="1168.1" y="113" width="2.7" height="15.0" fill="rgb(244,150,43)" rx="2" ry="2" />
+<text text-anchor="" x="1171.09" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Filter::FlateDecode::BEGIN@4 (108,380 microseconds, 2.09%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Filter::FlateDecode::BEGIN@4 (108,380 microseconds, 2.09%)</title><a xlink:href="FlateDecode-pm-28-line.html#4" target="_top"><rect x="1137.8" y="161" width="24.7" height="15.0" fill="rgb(237,99,35)" rx="2" ry="2" />
+<text text-anchor="" x="1140.80" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >M..</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,568 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,568 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1166.2" y="145" width="0.3" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1169.19" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Core::get_dict (2,138 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Core::get_dict (2,138 microseconds, 0.04%)</title><a xlink:href="Core-pm-7-line.html#111" target="_top"><rect x="12.5" y="97" width="0.5" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="15.54" y="107.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Digest::MD5::BEGIN@4 (2,008 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Digest::MD5::BEGIN@4 (2,008 microseconds, 0.04%)</title><a xlink:href="Digest-MD5-pm-60-line.html#4" target="_top"><rect x="1165.7" y="145" width="0.4" height="15.0" fill="rgb(237,113,35)" rx="2" ry="2" />
+<text text-anchor="" x="1168.68" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::Alias::init_aliases (820 microseconds, 0.02%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::Alias::init_aliases (820 microseconds, 0.02%)</title><a xlink:href="Encode-Alias-pm-18-line.html#137" target="_top"><rect x="1129.0" y="129" width="0.2" height="15.0" fill="rgb(239,148,37)" rx="2" ry="2" />
+<text text-anchor="" x="1131.96" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('XSLoader::load (1,449 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>XSLoader::load (1,449 microseconds, 0.03%)</title><a xlink:href="XSLoader-pm-71-line.html#18" target="_top"><rect x="1162.1" y="129" width="0.3" height="15.0" fill="rgb(243,122,41)" rx="2" ry="2" />
+<text text-anchor="" x="1165.06" y="139.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Carp::shortmess (1,567 microseconds, 0.03%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Carp::shortmess (1,567 microseconds, 0.03%)</title><a xlink:href="Carp-pm-12-line.html#282" target="_top"><rect x="10.1" y="161" width="0.3" height="15.0" fill="rgb(237,109,35)" rx="2" ry="2" />
+<text text-anchor="" x="13.07" y="171.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Exporter::import (546 microseconds, 0.01%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Exporter::import (546 microseconds, 0.01%)</title><a xlink:href="Exporter-pm-11-line.html#28" target="_top"><rect x="1158.9" y="113" width="0.2" height="15.0" fill="rgb(238,94,36)" rx="2" ry="2" />
+<text text-anchor="" x="1161.94" y="123.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Mail::SpamAssassin::PDF::Parser::_parse_contents (4,859,888 microseconds, 93.82%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Mail::SpamAssassin::PDF::Parser::_parse_contents (4,859,888 microseconds, 93.82%)</title><a xlink:href="Parser-pm-6-line.html#339" target="_top"><rect x="13.0" y="145" width="1107.1" height="15.0" fill="rgb(238,99,36)" rx="2" ry="2" />
+<text text-anchor="" x="16.03" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >Mail::SpamAssassin::PDF::Parser::_parse_contents</text>
+</a>
+</g>
+<g class="func_g" onmouseover="s('Encode::utf8::BEGIN@241 (1,980 microseconds, 0.04%)')" onmouseout="c()" onclick="zoom(this)">
+<title>Encode::utf8::BEGIN@241 (1,980 microseconds, 0.04%)</title><a xlink:href="Encode-pm-8-line.html#241" target="_top"><rect x="1134.3" y="145" width="0.4" height="15.0" fill="rgb(229,148,26)" rx="2" ry="2" />
+<text text-anchor="" x="1137.28" y="155.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</a>
+</g>
+</svg>
