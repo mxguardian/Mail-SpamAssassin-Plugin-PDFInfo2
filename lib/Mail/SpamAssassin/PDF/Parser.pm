@@ -76,14 +76,8 @@ sub parse {
 
         # Parse cross-reference table (and trailer)
         $data =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
-        my $pos = $1;
-        $self->{core}->pos($pos);
-        if ( !$self->_parse_xref() ) {
-            $self->{core}->pos($pos);
-            if ( !$self->_parse_xref_stream() ) {
-                die "xref table not found at offset $pos";
-            }
-        }
+        $self->_parse_xref($1);
+        debug('xref',Dumper($self->{xref}));
 
         # Parse encryption dictionary
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
@@ -138,11 +132,15 @@ sub is_protected {
 # Private methods
 ###################
 sub _parse_xref {
-    my ($self) = @_;
+    my ($self,$pos) = @_;
 
-    eval {
-        $self->{core}->assert_token('xref');
-    } or return 0;
+    $self->{core}->pos($pos);
+    my $token = $self->{core}->get_token();
+    if ( $token ne 'xref' ) {
+        # not a cross-reference table. Assume it's a cross-reference stream
+        $self->{core}->pos($pos);
+        return $self->_parse_xref_stream();
+    }
 
     while () {
         my $start = eval { $self->{core}->get_number(); };
@@ -167,8 +165,7 @@ sub _parse_xref {
     };
 
     if ( defined($trailer->{'/Prev'}) ) {
-        $self->{core}->pos($trailer->{'/Prev'});
-        return $self->_parse_xref();
+        return $self->_parse_xref($trailer->{'/Prev'});
     }
 
     return 1;
@@ -178,12 +175,9 @@ sub _parse_xref {
 sub _parse_xref_stream {
     my ($self) = @_;
 
-    eval {
-        $self->{core}->get_number();
-        $self->{core}->get_number();
-        $self->{core}->assert_token('obj');
-        1;
-    } or return 0;
+    $self->{core}->get_number();
+    $self->{core}->get_number();
+    $self->{core}->assert_token('obj');
 
     my $xref = $self->{core}->get_dict();
     my ($start,$count) = (0,$xref->{'/Size'});
@@ -214,8 +208,7 @@ sub _parse_xref_stream {
     $self->{trailer} = $xref;
 
     if ( defined($xref->{'/Prev'}) ) {
-        $self->{core}->pos($xref->{'/Prev'});
-        $self->_parse_xref();
+        $self->_parse_xref($xref->{'/Prev'});
     }
 
     return 1;
@@ -450,6 +443,8 @@ sub _parse_contents {
         $stream .= $self->_get_stream_data($obj);
     }
 
+    debug('contents',$stream);
+
     open(my $fh, '<', \$stream) or die "Can't open stream: $!";
     binmode($fh);
     my $core = $self->{core}->clone($fh);
@@ -458,11 +453,11 @@ sub _parse_contents {
     while () {
         my ($token,$type) = $core->get_primitive();
         last unless defined($token);
-        if ( $type ne 'operator' ) {
+        # print "$type: $token\n";
+        if ( $type != Mail::SpamAssassin::PDF::Core::TYPE_OP ) {
             push(@params,$token);
             next;
         }
-        # print "$token\n";
         if ( $token eq 'BI' ) {
             my $image = $self->_parse_inline_image($core);
             $context->draw_image($image,$page) if $self->{context}->can('draw_image');
@@ -521,7 +516,6 @@ sub _get_obj {
                 $core->get_number();
                 $core->assert_token('obj');
                 $obj = $core->get_primitive();
-                $core->assert_token('endobj');
             } or die "Error getting object $ref: $@";
         }
         if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
@@ -613,7 +607,7 @@ sub debug {
     return if !defined($debug);
     if ( $debug eq $level || $debug eq 'all' ) {
         for (@_) {
-            print STDOUT (ref($_) ? Dumper($_) : $_),"\n";
+            print STDERR (ref($_) ? Dumper($_) : $_),"\n";
         }
     }
 }

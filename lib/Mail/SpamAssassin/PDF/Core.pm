@@ -325,7 +325,7 @@ sub get_hex_string {
         $str = $self->{crypt}->decrypt($str);
     }
 
-    if ( substr($str,0,2) eq "\xFE\xFF" ) {
+    if ( $str =~ s/^\xfe\xff// ) {
         from_to($str,'UTF-16be', 'UTF-8');
     } elsif ( $str =~ s/^\xff\xfe// ) {
         from_to($str,'UTF-16le', 'UTF-8');
@@ -402,8 +402,6 @@ sub get_dict {
             }
         }
         $dict{_stream_offset} = tell($fh);
-        seek($fh, $dict{'/Length'}, 1);
-        $self->assert_token('endstream');
         return wantarray ? (\%dict,TYPE_STREAM) : \%dict;
     } else {
         seek($fh, $offset, 0);
@@ -570,11 +568,11 @@ sub _get_num_or_ref {
         last unless defined($ch = getc($fh));
     }
     if ( $state == 2 && $buf eq 'R' ) {
-        return wantarray ? ($ref,'ref') : $ref;
+        return wantarray ? ($ref,TYPE_REF) : $ref;
     }
 
     seek($fh, -length($ref)+length($num), 1);
-    return wantarray ? ($num,'number') : $num;
+    return wantarray ? ($num,TYPE_NUM) : $num;
 }
 
 sub unquote_name {

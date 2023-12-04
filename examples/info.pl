@@ -20,8 +20,9 @@ use Pod::Usage;
 =cut
 
 my %opts;
-getopts('f:',\%opts);
+getopts('f:d:',\%opts);
 my $field = $opts{'f'};
+my $debug = $opts{'d'};
 
 pod2usage() unless scalar(@ARGV);
 
@@ -38,6 +39,7 @@ while (my $file = shift) {
     my $pdf = Mail::SpamAssassin::PDF::Parser->new(
         context         => $context,
         timeout         => 5,
+        debug           => $debug,
     );
 
     eval {
