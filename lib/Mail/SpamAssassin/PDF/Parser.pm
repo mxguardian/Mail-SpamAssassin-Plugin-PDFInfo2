@@ -64,6 +64,7 @@ sub parse {
     binmode($fh);
 
     $self->{core} = Mail::SpamAssassin::PDF::Core->new($fh);
+    $self->{data} = $data;
 
     $data =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
     $self->{version} = $1;
@@ -177,15 +178,14 @@ sub _parse_xref {
 sub _parse_xref_stream {
     my ($self) = @_;
 
-    $self->{core}->get_number();
-    print $self->{core}->pos(),"\n";
-    $self->{core}->get_number();
-    print $self->{core}->pos(),"\n";
-    $self->{core}->assert_token('obj');
-    print $self->{core}->pos(),"\n";
+    eval {
+        $self->{core}->get_number();
+        $self->{core}->get_number();
+        $self->{core}->assert_token('obj');
+        1;
+    } or return 0;
 
     my $xref = $self->{core}->get_dict();
-    print Dumper($xref);
     my ($start,$count) = (0,$xref->{'/Size'});
     if ( defined($xref->{'/Index'}) ) {
         $start = $xref->{'/Index'}->[0];
@@ -217,6 +217,8 @@ sub _parse_xref_stream {
         $self->{core}->pos($xref->{'/Prev'});
         $self->_parse_xref();
     }
+
+    return 1;
 
 }
 
@@ -497,14 +499,15 @@ sub _parse_inline_image {
 
 sub _get_obj {
     my ($self,$ref) = @_;
+    my $core = $self->{core};
 
     # return undef for non-existent objects
     return undef unless defined($ref) && defined($self->{xref}->{$ref});
 
     if ( !defined($self->{object_cache}->{$ref}) ) {
         my ($objnum,$gennum) = $ref =~ /^(\d+) (\d+) R$/;
-        if (defined($self->{core}->{crypt})) {
-            $self->{core}->{crypt}->set_current_object($objnum, $gennum);
+        if (defined($core->{crypt})) {
+            $core->{crypt}->set_current_object($objnum, $gennum);
         }
 
         my $obj;
@@ -512,12 +515,13 @@ sub _get_obj {
             my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
             $obj = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
         } else {
-            $self->{core}->pos($self->{xref}->{$ref});
+            $core->pos($self->{xref}->{$ref});
             eval {
-                $self->{core}->get_number();
-                $self->{core}->get_number();
-                $self->{core}->assert_token('obj');
-                $obj = $self->{core}->get_primitive();
+                $core->get_number();
+                $core->get_number();
+                $core->assert_token('obj');
+                $obj = $core->get_primitive();
+                $core->assert_token('endobj');
             } or die "Error getting object $ref: $@";
         }
         if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
@@ -546,18 +550,21 @@ sub _get_compressed_obj {
     my $obj = $1;
 
     my $stream_obj = $self->_get_obj($stream_obj_ref);
-    my $data = $self->_get_stream_data($stream_obj);
 
-    if ( !defined($stream_obj->{pos}) ) {
-        while ( $data =~ /\G\s*(\d+) (\d+)\s*/ ) {
-            $stream_obj->{xref}->{$1} = $2;
-            pos($data) = $+[0];
+    if ( !defined($stream_obj->{core}) ) {
+        my $data = $self->_get_stream_data($stream_obj);
+        open (my $fh, '<', \$data) or die "Can't open data stream: $!";
+        my $core = $stream_obj->{core} = $self->{core}->clone($fh);
+        my @array;
+        while ( defined($_ = $core->get_number()) ) {
+            push(@array,$_);
         }
-        $stream_obj->{pos} = pos($data);
+        $stream_obj->{xref} = { @array };
+        $stream_obj->{pos} = $core->pos();
     }
 
-    pos($data) = $stream_obj->{pos} + $stream_obj->{xref}->{$obj};
-    return $self->{object_cache}->{$ref} = $self->{core}->get_primitive(\$data);
+    $stream_obj->{core}->pos($stream_obj->{pos}+$stream_obj->{xref}->{$obj});
+    return $self->{object_cache}->{$ref} = $stream_obj->{core}->get_primitive();
 }
 
 sub _get_stream_data {
@@ -583,6 +590,7 @@ sub _get_stream_data {
         $self->{core}->{crypt}->set_current_object($stream_obj->{_objnum}, $stream_obj->{_gennum});
         $stream_data = $self->{core}->{crypt}->decrypt($stream_data);
     }
+    $self->{core}->assert_token('endstream');
 
     foreach my $filter (@filters) {
         if ( $filter eq '/FlateDecode' ) {

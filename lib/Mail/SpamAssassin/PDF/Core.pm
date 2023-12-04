@@ -20,14 +20,21 @@ used directly, but rather to be used by other modules in this distribution.
 
 =cut
 
-use constant CHAR_SPACE => 0;
-use constant CHAR_NUM   => 1;
-use constant CHAR_ALPHA => 2;
-use constant CHAR_TERM  => 3;
+use constant CHAR_SPACE             => 0;
+use constant CHAR_NUM               => 1;
+use constant CHAR_ALPHA             => 2;
+use constant CHAR_BEGIN_NAME        => 3;
+use constant CHAR_BEGIN_ARRAY       => 4;
+use constant CHAR_BEGIN_DICT        => 5;
+use constant CHAR_END_ARRAY         => 6;
+use constant CHAR_END_DICT          => 7;
+use constant CHAR_BEGIN_STRING      => 8;
+use constant CHAR_END_STRING        => 9;
+use constant CHAR_BEGIN_COMMENT     => 10;
 
 use constant TYPE_NUM     => 0;
 use constant TYPE_OP      => 1;
-use constant TYPE_STR     => 2;
+use constant TYPE_STRING  => 2;
 use constant TYPE_NAME    => 3;
 use constant TYPE_REF     => 4;
 use constant TYPE_ARRAY   => 5;
@@ -43,13 +50,18 @@ my %specials = (
 );
 
 my %class_map;
-$class_map{$_} = CHAR_SPACE for split //, " \n\r\t\f\b";
-$class_map{$_} = CHAR_NUM   for qw( 0 1 2 3 4 5 6 7 8 9 . + - );
-$class_map{$_} = CHAR_ALPHA for qw( a b c d e f g h i j k l m n o p q r s t u v w x y z );
-$class_map{$_} = CHAR_ALPHA for qw( A B C D E F G H I J K L M N O P Q R S T U V W X Y Z );
-$class_map{$_} = CHAR_ALPHA for qw( _ * );
-$class_map{$_} = CHAR_TERM  for split //, "[]<>(){}/";
-
+$class_map{$_} = CHAR_SPACE         for split //, " \n\r\t\f\b";
+$class_map{$_} = CHAR_NUM           for split //, '0123456789.+-';
+$class_map{$_} = CHAR_ALPHA         for split //, 'abcdefghijklmnopqrstuvwxyz*';
+$class_map{$_} = CHAR_ALPHA         for split //, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+$class_map{$_} = CHAR_BEGIN_NAME    for split //, '/';
+$class_map{$_} = CHAR_BEGIN_ARRAY   for split //, '[';
+$class_map{$_} = CHAR_END_ARRAY     for split //, ']';
+$class_map{$_} = CHAR_BEGIN_STRING  for split //, '(';
+$class_map{$_} = CHAR_END_STRING    for split //, ')';
+$class_map{$_} = CHAR_BEGIN_DICT    for split //, '<';
+$class_map{$_} = CHAR_END_DICT      for split //, '>';
+$class_map{$_} = CHAR_BEGIN_COMMENT for split //, '%';
 
 sub new {
     my ($class,$fh) = @_;
@@ -72,7 +84,7 @@ sub clone {
 
 =item pos($offset)
 
-Sets the file pointer to the specified offset.
+Sets the file pointer to the specified offset.  If no offset is specified, returns the current offset.
 
 =cut
 
@@ -81,22 +93,26 @@ sub pos {
     defined($offset) ? seek($self->{fh},$offset,0) : tell($self->{fh});
 }
 
+=item get_name
+
+Reads a name from the file.  A name is a forward slash followed by a sequence of characters.  The file pointer is left
+at the first character after the name.
+
+=cut
+
 sub get_name {
     my ($self) = @_;
     my $fh = $self->{fh};
 
-    {
-        my $offset = tell($fh);
-        unless (getc($fh) eq '/') {
-            seek($fh, $offset, 0);
-            croak "Name not found at offset $offset";
-        }
+    my $name = getc($fh);
+    unless ($name eq '/') {
+        seek($fh, -1, 1);
+        croak "Name not found at offset " . tell($fh);
     }
 
-    my $name = '/';
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
-        if ( defined($class) && $class == CHAR_ALPHA) {
+        if ( defined($class) && ($class == CHAR_ALPHA || $class == CHAR_NUM || $ch eq '_')) {
             $name .= $ch;
             next;
         } else {
@@ -107,17 +123,20 @@ sub get_name {
     return wantarray ? ($name,TYPE_NAME) : $name;
 }
 
+=item get_string
+
+Reads a string from the file.  A string is a sequence of characters enclosed in parentheses.  The file pointer is left
+at the first character after the string.
+
+=cut
 
 sub get_string {
     my ($self) = @_;
     my $fh = $self->{fh};
 
-    {
-        my $offset = tell($fh);
-        unless (getc($fh) eq '(') {
-            seek($fh, $offset, 0);
-            croak "string not found at offset $offset";
-        }
+    unless (getc($fh) eq '(') {
+        seek($fh, -1, 1);
+        croak "string not found at offset " . tell($fh);
     }
 
     my $depth = 1;
@@ -179,8 +198,15 @@ sub get_string {
     # remove trailing null chars
     $str =~ s/\x00+$//;
 
-    return wantarray ? ($str,TYPE_STR) : $str;
+    return wantarray ? ($str,TYPE_STRING) : $str;
 }
+
+=item get_number
+
+Reads a number from the file.  A number can be an integer or a real number.  The file pointer is left at the first
+character after the number. Returns undef if no number is found.
+
+=cut
 
 sub get_number {
     my ($self) = @_;
@@ -200,7 +226,8 @@ sub get_number {
             next;
         } else {
             seek($fh, -1, 1);
-            croak "Number expected, got '$ch' at offset " . tell($fh);
+            return undef;
+            # croak "Number expected, got '$ch' at offset " . tell($fh)
         }
     }
     $num += 0;
@@ -218,29 +245,58 @@ sub assert_token {
     my ($self,$literal) = @_;
     my $fh = $self->{fh};
 
-    my $token = '';
+    my $token = $self->get_token();
+    if (!defined($token) ) {
+        croak "Expected '$literal', got EOF at offset " . tell($fh);
+    }
+    if ($token ne $literal) {
+        seek($fh, -length($token), 1);
+        croak "Expected '$literal', got '$token' at offset " . tell($fh);
+    }
+    1;
+}
+
+=item get_token
+
+Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
+there are no more tokens. Will croak if an invalid character is encountered.
+
+=cut
+
+sub get_token {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    my $token = undef;
     my $last_class;
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
-        die "unknown char $ch" unless defined($class);
-        if ( defined($last_class) && $class != $last_class ) {
-            if ($last_class == CHAR_SPACE ) {
+        unless (defined($class)) {
+            seek($fh, -1, 1);
+            croak "unknown char $ch at offset " . tell($fh);
+        }
+        if ( defined($last_class) && ($class != $last_class or $ch eq '/') ) {
+            if ($last_class == CHAR_SPACE) {
                 # skip leading spaces
                 $token = '';
             } else {
-                seek($fh, -1, 1);
+                seek($fh, -1, 1) unless $class == CHAR_SPACE;
                 last;
             }
         }
         $last_class = $class;
         $token .= $ch;
     }
-    if ($token ne $literal) {
-        seek($fh, -length($token), 1);
-        croak "Expected '$literal', got '$token' at offset " . tell($fh);
-    }
 
+    return wantarray ? ($token,$last_class) : $token;
 }
+
+=item get_hex_string
+
+Reads a hex string from the file.  A hex string is a sequence of hexadecimal digits enclosed in angle brackets.  The
+file pointer is left at the first character after the string.
+
+=cut
 
 sub get_hex_string {
     my ($self) = @_;
@@ -274,21 +330,22 @@ sub get_hex_string {
     } elsif ( $str =~ s/^\xff\xfe// ) {
         from_to($str,'UTF-16le', 'UTF-8');
     }
-    return  wantarray ? ($str,TYPE_STR) : $str;
+    return  wantarray ? ($str,TYPE_STRING) : $str;
 }
+
+=item get_array
+
+Reads an array from the file.  An array is a sequence of objects enclosed in square brackets.  The file pointer is left
+at the first character after the array.
+
+=cut
 
 sub get_array {
     my ($self) = @_;
     my $fh = $self->{fh};
     my @array;
 
-    {
-        my $offset = tell($fh);
-        unless (getc($fh) eq '[') {
-            seek($fh, $offset, 0);
-            croak "Array not found at offset $offset";
-        }
-    }
+    $self->assert_token('[');
 
     while () {
         ($_) = $self->get_primitive($fh);
@@ -299,6 +356,13 @@ sub get_array {
     return wantarray ? (\@array,TYPE_ARRAY) : \@array;
 }
 
+=item get_dict
+
+Reads a dictionary from the file.  A dictionary is a sequence of key/value pairs enclosed in double angle brackets.  The
+file pointer is left at the first character after the dictionary.
+
+=cut
+
 sub get_dict {
     my ($self) = @_;
     my $fh = $self->{fh};
@@ -306,11 +370,8 @@ sub get_dict {
 
     $self->assert_token('<<');
 
-    print tell($fh),"\n";
-
     while () {
         $_ = $self->get_primitive();
-        print Dumper($_);
         croak "Unexpected end of file" unless defined($_);
         last if $_ eq '>>';
         push(@array,$_);
@@ -327,8 +388,8 @@ sub get_dict {
     #   stream\r
 
     my $offset = tell($fh);
-    ($_) = $self->get_primitive();
-    if ($_ eq 'stream') {
+    $_ = $self->get_token();
+    if (defined($_) && $_ eq 'stream') {
         for (1..2) {
             my $ch = getc($fh);
             if ( !defined($ch) or $ch eq "\n") {
@@ -341,6 +402,9 @@ sub get_dict {
             }
         }
         $dict{_stream_offset} = tell($fh);
+        seek($fh, $dict{'/Length'}, 1);
+        $self->assert_token('endstream');
+        return wantarray ? (\%dict,TYPE_STREAM) : \%dict;
     } else {
         seek($fh, $offset, 0);
     }
@@ -349,6 +413,12 @@ sub get_dict {
 
 }
 
+=item get_primitive
+
+Reads a primitive object from the file.  A primitive object can be a number, string, name, array, dictionary, or reference.
+The file pointer is left at the first character after the object.
+
+=cut
 
 sub get_primitive {
     my ($self) = @_;
@@ -357,38 +427,6 @@ sub get_primitive {
     my $last_class;
     my $buf = '';
     while (defined(my $ch = getc($fh))) {
-        if ( $ch eq '/' ) {
-            seek($fh, -1, 1);
-            return $self->get_name($fh);
-        }
-        if ( $ch eq '<' ) {
-            if (getc($fh) eq '<') {
-                seek($fh, -2, 1);
-                return $self->get_dict($fh);
-            } else {
-                seek($fh, -2, 1);
-                return $self->get_hex_string($fh);
-            }
-        }
-        if ( $ch eq '[' ) {
-            seek($fh, -1, 1);
-            return $self->get_array($fh);
-        }
-        if ( $ch eq '(' ) {
-            seek($fh, -1, 1);
-            return $self->get_string($fh);
-        }
-        if ( index(')]', $ch) >= 0 ) {
-            # single char terminator
-            return wantarray ? ($ch,CHAR_TERM) : $ch;
-        }
-        if ( $ch eq '>' ) {
-            if ( getc($fh) eq '>' ) {
-                # double char terminator
-                return wantarray ? ('>>',CHAR_TERM) : '>>';
-            }
-            seek($fh, -1, 1);
-        }
         my $class = $class_map{$ch};
         die "unknown char $ch" unless defined($class);
         if ( $class == CHAR_NUM ) {
@@ -402,11 +440,48 @@ sub get_primitive {
                 last;
             }
         }
+        if ( $class == CHAR_BEGIN_NAME ) {
+            seek($fh, -1, 1);
+            return $self->get_name($fh);
+        }
+        if ( $class == CHAR_BEGIN_DICT ) {
+            if (getc($fh) eq $ch) {
+                seek($fh, -2, 1);
+                return $self->get_dict($fh);
+            } else {
+                seek($fh, -2, 1);
+                return $self->get_hex_string($fh);
+            }
+        }
+        if ( $class == CHAR_BEGIN_ARRAY ) {
+            seek($fh, -1, 1);
+            return $self->get_array($fh);
+        }
+        if ( $class == CHAR_BEGIN_STRING ) {
+            seek($fh, -1, 1);
+            return $self->get_string($fh);
+        }
+        if ( $class == CHAR_END_ARRAY || $class == CHAR_END_STRING ) {
+            return wantarray ? ($ch,$class) : $ch;
+        }
+        if ( $class == CHAR_END_DICT ) {
+            if ( getc($fh) eq $ch ) {
+                return wantarray ? ('>>',CHAR_END_DICT) : '>>';
+            }
+            seek($fh, -1, 1);
+            return wantarray ? ($ch,CHAR_END_STRING) : $ch;
+        }
+        if ( $class == CHAR_BEGIN_COMMENT ) {
+            while (defined($ch = getc($fh))) {
+                last if $ch eq "\n";
+            }
+            next;
+        }
         $buf .= $ch;
         $last_class = $class;
     }
 
-    if (!defined($last_class) || $last_class != CHAR_SPACE) {
+    if (!defined($last_class) || $last_class eq CHAR_SPACE) {
         # EOF
         return (undef,undef);
     } elsif ( $last_class == CHAR_ALPHA ) {
@@ -433,9 +508,9 @@ sub _get_num_or_ref {
     my ($self,$ch) = @_;
     my $fh = $self->{fh};
     my $state = 0;
-    my ($buf,$num,$ref) = ('','','');
-    my $last_class;
+    my ($buf,$num,$ref) = ('',undef,'');
     $ch = getc($fh) unless defined($ch);
+    my $last_class = $class_map{$ch};
     while () {
         if ( $ch =~ /[+-.]/ ) {
             # real number detected
@@ -449,13 +524,18 @@ sub _get_num_or_ref {
         }
         my $class = $class_map{$ch};
         die "unknown char $ch at offset ".(tell($fh)-1) unless defined($class);
-        if ( defined($last_class) && $class != $last_class ) {
+        if ( defined($last_class) && ($class != $last_class or $ch eq '/' ) ) {
 
             if ( $last_class == CHAR_SPACE ) {
                 # skip leading spaces
                 $buf = '';
             } elsif ( $last_class == CHAR_NUM ) {
-                if ($state == -1) {
+                if ($class != CHAR_SPACE) {
+                    # number followed by non-space so we're done
+                    $num = $buf unless defined($num);
+                    seek($fh, -1, 1);
+                    last;
+                } elsif ($state == -1) {
                     # found a real number so we're done
                     $num = $buf;
                     last;
@@ -464,8 +544,7 @@ sub _get_num_or_ref {
                     $num = $buf;
                     $buf = '';
                     $state = 1;
-                }
-                elsif ($state == 1) {
+                } elsif ($state == 1) {
                     # found the second number so keep looking
                     $state = 2;
                 }

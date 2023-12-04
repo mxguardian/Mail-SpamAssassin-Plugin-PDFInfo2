@@ -14,7 +14,34 @@ my @tests = (
             '/Columns'   => 5,
             '/Predictor' => 12,
         },
-    },
+    },{
+        input  => "<</C 506/Filter/FlateDecode/I 528/Length 17/O 426/S 223/V 442>>stream\r\n...stream data...\r\nendstream",
+        output => {
+            '/C' => '506',
+            '/Length' => '17',
+            '/Filter' => '/FlateDecode',
+            '/I' => '528',
+            '/O' => '426',
+            '/S' => '223',
+            '/V' => '442',
+            '_stream_offset' => 71,
+        },
+    }, {
+        input  => "<</AcroForm<</Fields[]>>/Pages 2 0 R /StructTreeRoot 72 0 R /Type/Catalog/MarkInfo<</Marked true>>/Lang(en-US)/Metadata 475 0 R >>\nendobj",
+        output => {
+            '/AcroForm'       => {
+                '/Fields' => [],
+            },
+            '/Lang'           => 'en-US',
+            '/MarkInfo'       => {
+                '/Marked' => 'true',
+            },
+            '/Metadata'       => '475 0 R',
+            '/Pages'          => '2 0 R',
+            '/StructTreeRoot' => '72 0 R',
+            '/Type'           => '/Catalog',
+        },
+    }
 );
 
 plan tests => scalar @tests;

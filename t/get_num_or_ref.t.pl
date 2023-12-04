@@ -29,17 +29,21 @@ my @tests = (
         output => '230 0 R',
         pos    => 7,
     },{
-        input  => '5/Predictor',
+        input  => '5/Predictor 12>>',
         output => '5',
         pos    => 1,
     },{
-        input => '2 15 RFOO',
+        input  => '5 4/Predictor 12>>',
+        output => '5',
+        pos    => 1,
+    },{
+        input => '2 15 RRR',
         output => '2',
-        pos    => 2,
+        pos    => 1,
     },{
         input => '0 0 cm',
         output => '0',
-        pos    => 2,
+        pos    => 1,
     },{
         input => '18.5 588.2445 cm',
         output => '18.5',

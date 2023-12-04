@@ -16,12 +16,12 @@ my @tests = (
         input => '  obj  ',
         token => 'obj',
         output => 1,
-        pos    => 5,
+        pos    => 6,
     },{
         input => "\nobj\n",
         token => 'obj',
         output => 1,
-        pos    => 4,
+        pos    => 5,
     },{
         input => "noobj",
         token => 'obj',
