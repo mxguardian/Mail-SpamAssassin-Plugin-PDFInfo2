@@ -134,11 +134,11 @@ sub get_name {
 
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
-        if ( defined($class) && ($class == CHAR_ALPHA || $class == CHAR_NUM || $ch eq '_')) {
+        if ( defined($class) && ($class == CHAR_ALPHA || $class == CHAR_NUM )) {
             $name .= $ch;
             next;
         } else {
-            seek($fh, -1, 1);
+            seek($fh, -1, 1) unless $class == CHAR_SPACE;
             last;
         }
     }
@@ -237,19 +237,23 @@ sub get_number {
     my $num = '';
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
-        if ( defined($class) && $class == CHAR_NUM) {
+        unless (defined($class)) {
+            seek($fh, -1, 1);
+            croak "unknown char $ch at offset " . tell($fh);
+        }
+        if ( $class == CHAR_NUM) {
             $num .= $ch;
             next;
         } elsif ( length($num) ) {
-            seek($fh, -1, 1);
+            seek($fh, -1, 1) unless $class == CHAR_SPACE;
             last;
-        } elsif ( defined($class) && $class == CHAR_SPACE) {
+        } elsif ( $class == CHAR_SPACE) {
             # skip leading spaces
             next;
         } else {
+            # not a number
             seek($fh, -1, 1);
-            return undef;
-            # croak "Number expected, got '$ch' at offset " . tell($fh)
+            return;
         }
     }
     $num += 0;
