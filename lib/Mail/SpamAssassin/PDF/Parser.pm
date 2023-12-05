@@ -77,7 +77,6 @@ sub parse {
         # Parse cross-reference table (and trailer)
         $data =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
         $self->_parse_xref($1);
-        debug('xref',Dumper($self->{xref}));
 
         # Parse encryption dictionary
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
@@ -442,8 +441,6 @@ sub _parse_contents {
     for my $obj ( @$contents ) {
         $stream .= $self->_get_stream_data($obj);
     }
-
-    debug('contents',$stream);
 
     my $core = $self->{core}->clone(\$stream);
 
