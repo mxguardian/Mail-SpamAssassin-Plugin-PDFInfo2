@@ -132,32 +132,37 @@ sub is_protected {
 ###################
 sub _parse_xref {
     my ($self,$pos) = @_;
+    my $core = $self->{core};
 
-    $self->{core}->pos($pos);
-    my $token = $self->{core}->get_token();
+    $core->pos($pos);
+    my ($token,$type) = $core->get_token();
     if ( $token ne 'xref' ) {
-        # not a cross-reference table. Assume it's a cross-reference stream
-        $self->{core}->pos($pos);
+        # not a cross-reference table. May be a cross-reference stream
+        if ( $type != Mail::SpamAssassin::PDF::Core::CHAR_NUM ) {
+            die "xref not found at offset $pos";
+        }
+        $core->assert_number();
+        $core->assert_token('obj');
         return $self->_parse_xref_stream();
     }
 
     while () {
-        my $start = eval { $self->{core}->get_number(); };
+        my $start = eval { $core->get_number(); };
         last unless defined($start);
-        my $count = $self->{core}->get_number();
+        my $count = $core->get_number();
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
-            my $offset = $self->{core}->get_number();
-            my $gen = $self->{core}->get_number();
-            my $type = $self->{core}->get_primitive();
+            my $offset = $core->get_number();
+            my $gen = $core->get_number();
+            my $type = $core->get_primitive();
             next unless $type eq 'n';
             my $key = "$i $gen R";
             $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
         }
     }
 
-    $self->{core}->assert_token('trailer');
+    $core->assert_token('trailer');
 
-    my $trailer = $self->{core}->get_dict();
+    my $trailer = $core->get_dict();
     $self->{trailer} = {
         %{$trailer},
         %{$self->{trailer}}
@@ -173,10 +178,6 @@ sub _parse_xref {
 
 sub _parse_xref_stream {
     my ($self) = @_;
-
-    $self->{core}->get_number();
-    $self->{core}->get_number();
-    $self->{core}->assert_token('obj');
 
     my $xref = $self->{core}->get_dict();
     my ($start,$count) = (0,$xref->{'/Size'});

@@ -260,6 +260,26 @@ sub get_number {
     return wantarray ? ($num,TYPE_NUM) : $num;
 }
 
+sub assert_number {
+    my ($self,$num) = @_;
+    my $fh = $self->{fh};
+
+    my $offset = tell($fh);
+    my $token = $self->get_token();
+    if (!defined($token) ) {
+        seek($fh, $offset, 0);
+        croak "Expected number, got EOF at offset $offset";
+    }
+    if ($token !~ /^[0-9+.-]+$/ ) {
+        seek($fh, $offset, 0);
+        croak "Expected number, got '$token' at offset $offset";
+    }
+    if ( defined($num) && $token != $num ) {
+        seek($fh, $offset, 0);
+        croak "Expected number '$num', got '$token' at offset $offset";
+    }
+
+}
 
 =item assert_token($literal)
 
@@ -271,12 +291,13 @@ sub assert_token {
     my ($self,$literal) = @_;
     my $fh = $self->{fh};
 
+    my $offset = tell($fh);
     my $token = $self->get_token();
     if (!defined($token) ) {
         croak "Expected '$literal', got EOF at offset " . tell($fh);
     }
     if ($token ne $literal) {
-        seek($fh, -length($token), 1);
+        seek($fh, $offset, 0);
         croak "Expected '$literal', got '$token' at offset " . tell($fh);
     }
     1;
