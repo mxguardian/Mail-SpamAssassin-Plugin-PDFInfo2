@@ -2,7 +2,7 @@
 #
 # Run tests
 #
-prove t/info.t
+prove
 
 #
 # Concatenate all the source files into a single plugin file in the dist directory
