@@ -75,7 +75,7 @@ foreach my $test (@tests) {
     open(my $fh, '<', \$input);
     my $ch = getc($fh);
     my $core = Mail::SpamAssassin::PDF::Core->new($fh);
-    my $result = $core->_get_num_or_ref($ch);
+    my $result = $core->get_num_or_ref($ch);
     is($result, $output, "_get_num_or_ref($input) == $output");
     is($core->pos, $test->{pos}, "_get_num_or_ref($input)->pos == $test->{pos}");
     close($fh);

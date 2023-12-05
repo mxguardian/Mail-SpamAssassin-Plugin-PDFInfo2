@@ -64,6 +64,12 @@ $class_map{$_} = CHAR_BEGIN_DICT    for split //, '<';
 $class_map{$_} = CHAR_END_DICT      for split //, '>';
 $class_map{$_} = CHAR_BEGIN_COMMENT for split //, '%';
 
+=item new($fh)
+
+Creates a new instance of the object.  $fh is a file handle to the PDF file.
+
+=cut
+
 sub new {
     my ($class,$fh) = @_;
     bless {fh=>$fh},$class;
@@ -294,8 +300,9 @@ sub get_token {
 
 =item get_hex_string
 
-Reads a hex string from the file.  A hex string is a sequence of hexadecimal digits enclosed in angle brackets.  The
-file pointer is left at the first character after the string.
+Reads a hex string from the file.  A hex string is a sequence of hexadecimal digits enclosed in angle brackets with
+optional whitespace between the digits. The digits must be an even number of characters.  The file pointer is left at
+the first character after the string.
 
 =cut
 
@@ -303,22 +310,19 @@ sub get_hex_string {
     my ($self) = @_;
     my $fh = $self->{fh};
 
-    {
-        my $offset = tell($fh);
-        unless (getc($fh) eq '<') {
-            seek($fh, $offset, 0);
-            croak "hex string not found at offset " . tell($fh);
-        }
+    unless (getc($fh) eq '<') {
+        seek($fh, -1, 1);
+        croak "hex string not found at offset " . tell($fh);
     }
 
     my $hex = '';
     while ( defined(my $ch = getc($fh)) ) {
         last if $ch eq '>';
-        next if $ch =~ /\s/;
-        die "Invalid hex string" unless $ch =~ /[0-9a-fA-F]/;
+        next if $ch =~ /\s/; # skip whitespace
+        croak "Invalid hex string at offset " . tell($fh) unless $ch =~ /[0-9a-fA-F]/;
         $hex .= $ch;
     }
-    $hex .= '0' if (length($hex) % 2 == 1);
+    croak "Odd number of hex digits at offset " . tell($fh) if length($hex) % 2 == 1;
     my $str = pack("H*",$hex);
 
     # decrypt
@@ -414,8 +418,8 @@ sub get_dict {
 
 =item get_primitive
 
-Reads a primitive object from the file.  A primitive object can be a number, string, name, array, dictionary, or reference.
-The file pointer is left at the first character after the object.
+Reads a primitive object from the file.  A primitive object can be a number, string, name, array, dictionary,
+or reference. The file pointer is left at the first character after the object.
 
 =cut
 
@@ -429,7 +433,7 @@ sub get_primitive {
         my $class = $class_map{$ch};
         die "unknown char $ch" unless defined($class);
         if ( $class == CHAR_NUM ) {
-            return $self->_get_num_or_ref($ch);
+            return $self->get_num_or_ref($ch);
         }
         if ( defined($last_class) && $class != $last_class ) {
             if ($last_class == CHAR_SPACE ) {
@@ -493,8 +497,9 @@ sub get_primitive {
 
 =item get_line
 
-Reads a line from the file.  A line is a sequence of characters terminated by a newline or carriage return + newline.
-The file pointer is left at the first character after the line.
+Reads a line from the file.  A line is a sequence of characters terminated by a line feed, a carriage return, or
+a carriage return/line feed combo. The returned string will include the newline character(s).  The file pointer is left
+at the first character after the line.
 
 =cut
 
@@ -521,7 +526,7 @@ sub get_line {
     return $line;
 }
 
-=item _get_num_or_ref($fh,$ch)
+=item get_num_or_ref($fh,$ch)
 
 Reads a number or reference from the file. A number can be an integer or a real number. A reference is two non-negative
 integers separated by a space, followed by 'R' (eg. '0 15 R').  The file pointer is left at the first character after
@@ -532,7 +537,7 @@ read from the file.
 
 =cut
 
-sub _get_num_or_ref {
+sub get_num_or_ref {
     my ($self,$ch) = @_;
     my $fh = $self->{fh};
     my $state = 0;
