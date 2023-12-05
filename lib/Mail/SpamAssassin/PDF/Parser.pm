@@ -445,9 +445,7 @@ sub _parse_contents {
 
     debug('contents',$stream);
 
-    open(my $fh, '<', \$stream) or die "Can't open stream: $!";
-    binmode($fh);
-    my $core = $self->{core}->clone($fh);
+    my $core = $self->{core}->clone(\$stream);
 
     # Process commands
     while () {
@@ -545,8 +543,7 @@ sub _get_compressed_obj {
 
     if ( !defined($stream_obj->{core}) ) {
         my $data = $self->_get_stream_data($stream_obj);
-        open (my $fh, '<', \$data) or die "Can't open data stream: $!";
-        my $core = $stream_obj->{core} = $self->{core}->clone($fh);
+        my $core = $stream_obj->{core} = $self->{core}->clone(\$data);
         my @array;
         while ( defined($_ = $core->get_number()) ) {
             push(@array,$_);

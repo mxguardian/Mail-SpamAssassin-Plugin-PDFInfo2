@@ -66,13 +66,16 @@ $class_map{$_} = CHAR_BEGIN_COMMENT for split //, '%';
 
 =item new($fh)
 
-Creates a new instance of the object.  $fh is a file handle to the PDF file.
+Creates a new instance of the object.  $fh is an open file handle to the PDF file or a reference to a scalar containing
+the contents of the PDF file.
 
 =cut
 
 sub new {
-    my ($class,$fh) = @_;
-    bless {fh=>$fh},$class;
+    my $class = shift;
+    my $self = bless {},$class;
+    $self->_init(@_);
+    return $self;
 }
 
 =item clone($fh)
@@ -83,10 +86,22 @@ using the new file handle.
 =cut
 
 sub clone {
-    my ($self,$fh) = @_;
+    my $self = shift;
     my $copy = bless { %$self }, ref $self;
-    $copy->{fh} = $fh;
+    $copy->_init(@_);
     return $copy;
+}
+
+sub _init {
+    my $self = shift;
+    if (ref($_[0]) eq 'SCALAR') {
+        # scalar ref, open it as a file
+        open(my $fh, '<', $_[0]) or croak "Can't open file: $!";
+        binmode($fh);
+        $self->{fh} = $fh;
+    } else {
+        $self->{fh} = $_[0];
+    }
 }
 
 =item pos($offset)
