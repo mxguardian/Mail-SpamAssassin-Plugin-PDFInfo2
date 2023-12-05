@@ -60,13 +60,10 @@ sub new {
 sub parse {
     my ($self,$data) = @_;
 
-    open (my $fh, '<', \$data) or die "Can't open data stream: $!";
-    binmode($fh);
+    $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
 
-    $self->{core} = Mail::SpamAssassin::PDF::Core->new($fh);
-    $self->{data} = $data;
-
-    $data =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
+    # Parse header
+    $self->{core}->get_line() =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
     $self->{version} = $1;
 
     local $SIG{ALRM} = sub {die "__TIMEOUT__\n"};
@@ -75,8 +72,7 @@ sub parse {
     eval {
 
         # Parse cross-reference table (and trailer)
-        $data =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
-        $self->_parse_xref($1);
+        $self->_parse_xref($self->{core}->get_startxref());
 
         # Parse encryption dictionary
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});

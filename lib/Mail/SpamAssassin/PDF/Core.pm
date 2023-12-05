@@ -515,9 +515,8 @@ sub get_primitive {
             return wantarray ? ($ch,CHAR_END_STRING) : $ch;
         }
         if ( $class == CHAR_BEGIN_COMMENT ) {
-            local $/ = "\n";
-            my $comment = $ch.readline($fh);
-            return wantarray ? ($comment,TYPE_COMMENT) : $comment;
+            seek($fh, -1, 1);
+            return $self->get_comment($fh);
         }
         $buf .= $ch;
         $last_class = $class;
@@ -547,7 +546,8 @@ sub get_line {
     my ($self) = @_;
     my $fh = $self->{fh};
     my $line;
-    while (defined(my $ch = getc($fh))) {
+    my $limit = 1024;
+    while (defined(my $ch = getc($fh)) && $limit--) {
         $line .= $ch;
         if ($ch eq "\n") {
             last;
@@ -564,6 +564,72 @@ sub get_line {
     }
 
     return $line;
+}
+
+=item get_startxref
+
+Reads the startxref value from the end of the file. Will croak if the startxref value is not found or is invalid.
+
+=cut
+
+sub get_startxref {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    # read backwards from the end of the file looking for 'startxref'
+    my $tok = '';
+    my $pos = -1;
+    my $limit = 1024;
+    while ($limit--) {
+        seek($fh,$pos--,2);
+        my $ch = getc($fh);
+        last unless defined($ch);
+        if ( $ch =~ /\s/ ) {
+            if ( $tok eq 'startxref' ) {
+                seek($fh, 9, 1);
+                last;
+            }
+            $tok = '';
+            next;
+        }
+        $tok = $ch . $tok;
+        print "$tok\n";
+    }
+
+    croak "startxref not found" unless $tok eq 'startxref';
+
+    my $xref = $self->get_number();
+    croak "Invalid startxref" unless defined($xref);
+
+    eval {
+        $self->assert_token('%%');
+        $self->assert_token('EOF');
+        1;
+    } or do {
+        croak "Invalid startxref. EOF marker not found";
+    };
+
+    return $xref;
+
+}
+
+=item get_comment
+
+Reads a comment from the file.  A comment is a '%' sign followed by a sequence of characters terminated by a line feed,
+a carriage return, or a carriage return/line feed combo. The returned string will include the '%' and newline
+character(s).  The file pointer is left at the first character after the comment. Retuns undef if no comment is found.
+
+=cut
+
+sub get_comment {
+    my ($self) = @_;
+    my $comment = $self->get_line();
+    return unless defined $comment;
+    if ( substr($comment,0,1) ne '%' ) {
+        seek($self->{fh}, -length($comment), 1);
+        return;
+    }
+    return wantarray ? ($comment,TYPE_COMMENT) : $comment;
 }
 
 =item get_num_or_ref($fh,$ch)

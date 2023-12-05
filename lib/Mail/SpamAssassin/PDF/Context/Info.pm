@@ -134,17 +134,21 @@ sub parse_end {
 
     $self->{info}->{Encrypted} = $parser->is_encrypted();
     $self->{info}->{Protected} = $parser->is_protected();
-
     $self->{info}->{Version} = $parser->{version};
-    $self->{info}->{MD5} = uc(md5_hex($parser->{data}));
-    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
-    # print $self->{fuzzy_md5_data};
 
+    # Compute MD5
+    my $md5 = Digest::MD5->new();
+    my $core = $parser->{core};
+    $core->pos(0);
+    $md5->addfile($core->{fh});
+    $self->{info}->{MD5} = uc($md5->hexdigest());
+
+    # Compute MD5 Fuzzy1
+    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
 
     # Compute MD5 Fuzzy2
     # Start at beginning, get comments + first object
-    my $md5 = Digest::MD5->new();
-    my $core = $parser->{core};
+    $md5->reset();
     $core->pos(0);
     my $line;
     while (defined($line = $core->get_line())) {
