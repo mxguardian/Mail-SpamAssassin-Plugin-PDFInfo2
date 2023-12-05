@@ -44,7 +44,6 @@ sub new {
         is_encrypted => 0,
         is_protected => 0,
 
-        core         => Mail::SpamAssassin::PDF::Core->new(),
         context      => $opts{context} || Mail::SpamAssassin::PDF::Context::Info->new(),
 
         object_cache => {},
@@ -61,9 +60,10 @@ sub new {
 sub parse {
     my ($self,$data) = @_;
 
-    $self->{data} = $data;
+    $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
 
-    $self->{data} =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
+    # Parse header
+    $self->{core}->get_line() =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
     $self->{version} = $1;
 
     local $SIG{ALRM} = sub {die "__TIMEOUT__\n"};
@@ -72,8 +72,7 @@ sub parse {
     eval {
 
         # Parse cross-reference table (and trailer)
-        $self->{data} =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
-        $self->_parse_xref($1);
+        $self->_parse_xref($self->{core}->get_startxref());
 
         # Parse encryption dictionary
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
@@ -129,46 +128,54 @@ sub is_protected {
 ###################
 sub _parse_xref {
     my ($self,$pos) = @_;
+    my $core = $self->{core};
 
-    pos($self->{data}) = $pos;
-
-    if ( $self->{data} =~ /\G\s*\d+ \d+ obj\s+/) {
-        return $self->_parse_xref_stream($+[0]);
+    $core->pos($pos);
+    my ($token,$type) = $core->get_token();
+    if ( $token ne 'xref' ) {
+        # not a cross-reference table. May be a cross-reference stream
+        if ( $type != Mail::SpamAssassin::PDF::Core::CHAR_NUM ) {
+            die "xref not found at offset $pos";
+        }
+        $core->assert_number();
+        $core->assert_token('obj');
+        return $self->_parse_xref_stream();
     }
-    $self->{data} =~ /\G\s*xref\s+/g or die "xref not found at position $pos";
 
-    while ($self->{data} =~ /\G(\d+) (\d+)\s+/) {
-        pos($self->{data}) = $+[0]; # advance the pointer
-        my ($start,$count) = ($1,$2);
+    while () {
+        my $start = eval { $core->get_number(); };
+        last unless defined($start);
+        my $count = $core->get_number();
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
-            $self->{data} =~ /\G(\d+) (\d+) (f|n)\s+/gc or die "Invalid xref entry at offset ".pos($self->{data});
-            next unless $3 eq 'n';
-            my ($offset,$gen) = ($1+0,$2+0);
+            my $offset = $core->get_number();
+            my $gen = $core->get_number();
+            my $type = $core->get_primitive();
+            next unless $type eq 'n';
             my $key = "$i $gen R";
             $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
         }
     }
 
-    $self->{data} =~ /\G\s*trailer\b\s*/gc or die "trailer not found at offset ".pos($self->{data});
+    $core->assert_token('trailer');
 
-    my $trailer = $self->{core}->get_dict(\$self->{data});
+    my $trailer = $core->get_dict();
     $self->{trailer} = {
         %{$trailer},
         %{$self->{trailer}}
     };
 
     if ( defined($trailer->{'/Prev'}) ) {
-        $self->_parse_xref($trailer->{'/Prev'});
+        return $self->_parse_xref($trailer->{'/Prev'});
     }
+
+    return 1;
 
 }
 
 sub _parse_xref_stream {
-    my ($self,$pos) = @_;
+    my ($self) = @_;
 
-    pos($self->{data}) = $pos;
-
-    my $xref = $self->{core}->get_dict(\$self->{data});
+    my $xref = $self->{core}->get_dict();
     my ($start,$count) = (0,$xref->{'/Size'});
     if ( defined($xref->{'/Index'}) ) {
         $start = $xref->{'/Index'}->[0];
@@ -199,6 +206,8 @@ sub _parse_xref_stream {
     if ( defined($xref->{'/Prev'}) ) {
         $self->_parse_xref($xref->{'/Prev'});
     }
+
+    return 1;
 
 }
 
@@ -344,7 +353,6 @@ sub _parse_contents {
 
     #@type Mail::SpamAssassin::PDF::Context
     my $context = $self->{context};
-    my $core = Mail::SpamAssassin::PDF::Core->new;
     my @params;
 
     # Build a dispatch table
@@ -431,17 +439,19 @@ sub _parse_contents {
         $stream .= $self->_get_stream_data($obj);
     }
 
+    my $core = $self->{core}->clone(\$stream);
+
     # Process commands
     while () {
-        my ($token,$type) = $core->get_primitive(\$stream);
+        my ($token,$type) = $core->get_primitive();
         last unless defined($token);
-        if ( $type ne 'operator' ) {
+        # print "$type: $token\n";
+        if ( $type != Mail::SpamAssassin::PDF::Core::TYPE_OP ) {
             push(@params,$token);
             next;
         }
-        # print "$token\n";
         if ( $token eq 'BI' ) {
-            my $image = $self->_parse_inline_image($core,\$stream);
+            my $image = $self->_parse_inline_image($core);
             $context->draw_image($image,$page) if $self->{context}->can('draw_image');
             next;
         }
@@ -454,36 +464,35 @@ sub _parse_contents {
 }
 
 sub _parse_inline_image {
-    my ($self,$core,$ptr) = @_;
+    my ($self,$core) = @_;
 
     my @array;
     while () {
-        my $token = $core->get_primitive($ptr);
+        my $token = $core->get_primitive();
         last if $token eq 'ID';
         $token = $abbreviations{$token} if defined($abbreviations{$token});
         push(@array,$token);
     }
     my %image = @array;
-    # print Dumper(\%image);
 
     # skip over image data
-    my $pos = index($$ptr,'EI',pos($$ptr));
-    die "BI without matching EI" if $pos == -1;
-    pos($$ptr) = $pos;
+    local $/ = "\nEI";
+    readline $core->{fh};
 
-    \%image;
+    return \%image;
 }
 
 sub _get_obj {
     my ($self,$ref) = @_;
+    my $core = $self->{core};
 
     # return undef for non-existent objects
     return undef unless defined($ref) && defined($self->{xref}->{$ref});
 
     if ( !defined($self->{object_cache}->{$ref}) ) {
         my ($objnum,$gennum) = $ref =~ /^(\d+) (\d+) R$/;
-        if (defined($self->{core}->{crypt})) {
-            $self->{core}->{crypt}->set_current_object($objnum, $gennum);
+        if (defined($core->{crypt})) {
+            $core->{crypt}->set_current_object($objnum, $gennum);
         }
 
         my $obj;
@@ -491,11 +500,12 @@ sub _get_obj {
             my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
             $obj = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
         } else {
-            pos($self->{data}) = $self->{xref}->{$ref};
-            $self->{data} =~ /\G\s*\d+ \d+ obj\s*/g or die "object $ref not found";
+            $core->pos($self->{xref}->{$ref});
             eval {
-                $obj = $self->{core}->get_primitive(\$self->{data});
-                1;
+                $core->get_number();
+                $core->get_number();
+                $core->assert_token('obj');
+                $obj = $core->get_primitive();
             } or die "Error getting object $ref: $@";
         }
         if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
@@ -524,18 +534,20 @@ sub _get_compressed_obj {
     my $obj = $1;
 
     my $stream_obj = $self->_get_obj($stream_obj_ref);
-    my $data = $self->_get_stream_data($stream_obj);
 
-    if ( !defined($stream_obj->{pos}) ) {
-        while ( $data =~ /\G\s*(\d+) (\d+)\s*/ ) {
-            $stream_obj->{xref}->{$1} = $2;
-            pos($data) = $+[0];
+    if ( !defined($stream_obj->{core}) ) {
+        my $data = $self->_get_stream_data($stream_obj);
+        my $core = $stream_obj->{core} = $self->{core}->clone(\$data);
+        my @array;
+        while ( defined($_ = $core->get_number()) ) {
+            push(@array,$_);
         }
-        $stream_obj->{pos} = pos($data);
+        $stream_obj->{xref} = { @array };
+        $stream_obj->{pos} = $core->pos();
     }
 
-    pos($data) = $stream_obj->{pos} + $stream_obj->{xref}->{$obj};
-    return $self->{object_cache}->{$ref} = $self->{core}->get_primitive(\$data);
+    $stream_obj->{core}->pos($stream_obj->{pos}+$stream_obj->{xref}->{$obj});
+    return $self->{object_cache}->{$ref} = $stream_obj->{core}->get_primitive();
 }
 
 sub _get_stream_data {
@@ -555,11 +567,13 @@ sub _get_stream_data {
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
 
-    my $stream_data = substr($self->{data},$offset,$length);
+    $self->{core}->pos($offset);
+    read($self->{core}->{fh},my $stream_data,$length);
     if (defined($self->{core}->{crypt})) {
         $self->{core}->{crypt}->set_current_object($stream_obj->{_objnum}, $stream_obj->{_gennum});
         $stream_data = $self->{core}->{crypt}->decrypt($stream_data);
     }
+    $self->{core}->assert_token('endstream');
 
     foreach my $filter (@filters) {
         if ( $filter eq '/FlateDecode' ) {
@@ -582,7 +596,7 @@ sub debug {
     return if !defined($debug);
     if ( $debug eq $level || $debug eq 'all' ) {
         for (@_) {
-            print STDOUT (ref($_) ? Dumper($_) : $_),"\n";
+            print STDERR (ref($_) ? Dumper($_) : $_),"\n";
         }
     }
 }

@@ -66,8 +66,6 @@ sub draw_image {
     $is_color = 0 if defined($image->{'/ColorSpace'}) && $image->{'/ColorSpace'} =~ /gray/i;
     $is_color = 0 if defined($image->{'/BitsPerComponent'}) && $image->{'/BitsPerComponent'} == 1;
 
-    # print Dumper($image); exit;
-
     my $fuzzy_data = $self->serialize_fuzzy($image);
     $self->{fuzzy_md5}->add( $fuzzy_data );
     $self->{fuzzy_md5_data} .= $fuzzy_data;
@@ -136,29 +134,38 @@ sub parse_end {
 
     $self->{info}->{Encrypted} = $parser->is_encrypted();
     $self->{info}->{Protected} = $parser->is_protected();
-
     $self->{info}->{Version} = $parser->{version};
-    $self->{info}->{MD5} = uc(md5_hex($parser->{data}));
-    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
-    # print $self->{fuzzy_md5_data};
 
+    # Compute MD5
+    my $md5 = Digest::MD5->new();
+    my $core = $parser->{core};
+    $core->pos(0);
+    $md5->addfile($core->{fh});
+    $self->{info}->{MD5} = uc($md5->hexdigest());
+
+    # Compute MD5 Fuzzy1
+    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
 
     # Compute MD5 Fuzzy2
     # Start at beginning, get comments + first object
-    my $md5 = Digest::MD5->new();
-    pos($parser->{data}) = 0;
-    while ( $parser->{data} =~ /\G(%[^\n]+\n)/gc ) {
-        # print "> $1";
-        $md5->add($1);
+    $md5->reset();
+    $core->pos(0);
+    my $line;
+    while (defined($line = $core->get_line())) {
+        next if $line =~ /^\s*$/; # skip blank lines
+        last unless $line =~ /^%/;
+        # print "> $line\n";
+        $md5->add($line);
     }
-    if ( $parser->{data} =~ /\G\s*(\d+ \d+ obj\s*)/g ) {
-        # print "> $1";
+
+    if ( $line =~ /^\s*(\d+ \d+ obj\s*)/g ) {
+        # print "> $1\n";
         $md5->add($1); # include object number
-        my $obj = $parser->{core}->get_primitive(\$parser->{data});
+        my $obj = $parser->{core}->get_primitive();
         my $str = $self->serialize_fuzzy($obj);
         # print "> $str\n";
         $md5->add($str);
-    }
+    };
 
     $self->{info}->{MD5Fuzzy2} = uc($md5->hexdigest());
 
