@@ -571,6 +571,7 @@ for my $test (@tests) {
     my $pdf = Mail::SpamAssassin::PDF::Parser->new(
         context => $context
     );
+
     $pdf->parse(get_file_contents($test->{filename}));
     is_deeply $context->get_info(), $test->{expected}, $test->{filename};
 
