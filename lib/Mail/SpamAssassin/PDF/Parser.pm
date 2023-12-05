@@ -484,11 +484,9 @@ sub _parse_inline_image {
     my %image = @array;
 
     # skip over image data
-    my $fh = $core->{fh};
-    # read until we find EI on a line by itself
-    while ( <$fh> ) {
-        last if /^EI\s*$/;
-    }
+    local $/ = "\nEI";
+    readline $core->{fh};
+
     return \%image;
 }
 
