@@ -770,9 +770,8 @@ sub get_primitive {
             return wantarray ? ($ch,CHAR_END_STRING) : $ch;
         }
         if ( $class == CHAR_BEGIN_COMMENT ) {
-            local $/ = "\n";
-            my $comment = $ch.readline($fh);
-            return wantarray ? ($comment,TYPE_COMMENT) : $comment;
+            seek($fh, -1, 1);
+            return $self->get_comment($fh);
         }
         $buf .= $ch;
         $last_class = $class;
@@ -802,7 +801,8 @@ sub get_line {
     my ($self) = @_;
     my $fh = $self->{fh};
     my $line;
-    while (defined(my $ch = getc($fh))) {
+    my $limit = 1024;
+    while (defined(my $ch = getc($fh)) && $limit--) {
         $line .= $ch;
         if ($ch eq "\n") {
             last;
@@ -819,6 +819,72 @@ sub get_line {
     }
 
     return $line;
+}
+
+=item get_startxref
+
+Reads the startxref value from the end of the file. Will croak if the startxref value is not found or is invalid.
+
+=cut
+
+sub get_startxref {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    # read backwards from the end of the file looking for 'startxref'
+    my $tok = '';
+    my $pos = -1;
+    my $limit = 1024;
+    while ($limit--) {
+        seek($fh,$pos--,2);
+        my $ch = getc($fh);
+        last unless defined($ch);
+        if ( $ch =~ /\s/ ) {
+            if ( $tok eq 'startxref' ) {
+                seek($fh, 9, 1);
+                last;
+            }
+            $tok = '';
+            next;
+        }
+        $tok = $ch . $tok;
+        print "$tok\n";
+    }
+
+    croak "startxref not found" unless $tok eq 'startxref';
+
+    my $xref = $self->get_number();
+    croak "Invalid startxref" unless defined($xref);
+
+    eval {
+        $self->assert_token('%%');
+        $self->assert_token('EOF');
+        1;
+    } or do {
+        croak "Invalid startxref. EOF marker not found";
+    };
+
+    return $xref;
+
+}
+
+=item get_comment
+
+Reads a comment from the file.  A comment is a '%' sign followed by a sequence of characters terminated by a line feed,
+a carriage return, or a carriage return/line feed combo. The returned string will include the '%' and newline
+character(s).  The file pointer is left at the first character after the comment. Retuns undef if no comment is found.
+
+=cut
+
+sub get_comment {
+    my ($self) = @_;
+    my $comment = $self->get_line();
+    return unless defined $comment;
+    if ( substr($comment,0,1) ne '%' ) {
+        seek($self->{fh}, -length($comment), 1);
+        return;
+    }
+    return wantarray ? ($comment,TYPE_COMMENT) : $comment;
 }
 
 =item get_num_or_ref($fh,$ch)
@@ -1139,17 +1205,21 @@ sub parse_end {
 
     $self->{info}->{Encrypted} = $parser->is_encrypted();
     $self->{info}->{Protected} = $parser->is_protected();
-
     $self->{info}->{Version} = $parser->{version};
-    $self->{info}->{MD5} = uc(md5_hex($parser->{data}));
-    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
-    # print $self->{fuzzy_md5_data};
 
+    # Compute MD5
+    my $md5 = Digest::MD5->new();
+    my $core = $parser->{core};
+    $core->pos(0);
+    $md5->addfile($core->{fh});
+    $self->{info}->{MD5} = uc($md5->hexdigest());
+
+    # Compute MD5 Fuzzy1
+    $self->{info}->{MD5Fuzzy1} = uc($self->{fuzzy_md5}->hexdigest());
 
     # Compute MD5 Fuzzy2
     # Start at beginning, get comments + first object
-    my $md5 = Digest::MD5->new();
-    my $core = $parser->{core};
+    $md5->reset();
     $core->pos(0);
     my $line;
     while (defined($line = $core->get_line())) {
@@ -1615,13 +1685,10 @@ sub new {
 sub parse {
     my ($self,$data) = @_;
 
-    open (my $fh, '<', \$data) or die "Can't open data stream: $!";
-    binmode($fh);
+    $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
 
-    $self->{core} = Mail::SpamAssassin::PDF::Core->new($fh);
-    $self->{data} = $data;
-
-    $data =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
+    # Parse header
+    $self->{core}->get_line() =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
     $self->{version} = $1;
 
     local $SIG{ALRM} = sub {die "__TIMEOUT__\n"};
@@ -1630,8 +1697,7 @@ sub parse {
     eval {
 
         # Parse cross-reference table (and trailer)
-        $data =~ /(\d+)\s+\%\%EOF\s*$/ or croak "EOF marker not found";
-        $self->_parse_xref($1);
+        $self->_parse_xref($self->{core}->get_startxref());
 
         # Parse encryption dictionary
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
