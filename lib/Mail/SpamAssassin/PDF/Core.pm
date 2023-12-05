@@ -40,6 +40,7 @@ use constant TYPE_REF     => 4;
 use constant TYPE_ARRAY   => 5;
 use constant TYPE_DICT    => 6;
 use constant TYPE_STREAM  => 7;
+use constant TYPE_COMMENT => 8;
 
 my %specials = (
     'n' => "\n",
@@ -470,10 +471,9 @@ sub get_primitive {
             return wantarray ? ($ch,CHAR_END_STRING) : $ch;
         }
         if ( $class == CHAR_BEGIN_COMMENT ) {
-            while (defined($ch = getc($fh))) {
-                last if $ch eq "\n";
-            }
-            next;
+            local $/ = "\n";
+            my $comment = $ch.readline($fh);
+            return wantarray ? ($comment,TYPE_COMMENT) : $comment;
         }
         $buf .= $ch;
         $last_class = $class;
@@ -489,6 +489,36 @@ sub get_primitive {
         return wantarray ? ($buf,undef) : $buf;
     }
 
+}
+
+=item get_line
+
+Reads a line from the file.  A line is a sequence of characters terminated by a newline or carriage return + newline.
+The file pointer is left at the first character after the line.
+
+=cut
+
+sub get_line {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+    my $line;
+    while (defined(my $ch = getc($fh))) {
+        $line .= $ch;
+        if ($ch eq "\n") {
+            last;
+        } elsif ($ch eq "\r") {
+            my $ch2 = getc($fh);
+            if (defined($ch2) && $ch2 eq "\n") {
+                $line .= $ch2;
+                last;
+            } else {
+                seek($fh, -1, 1);
+                return $line;
+            }
+        }
+    }
+
+    return $line;
 }
 
 =item _get_num_or_ref($fh,$ch)
