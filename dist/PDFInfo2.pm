@@ -308,8 +308,9 @@ my %specials = (
 my %class_map;
 $class_map{$_} = CHAR_SPACE         for split //, " \n\r\t\f\b";
 $class_map{$_} = CHAR_NUM           for split //, '0123456789.+-';
-$class_map{$_} = CHAR_ALPHA         for split //, 'abcdefghijklmnopqrstuvwxyz*';
-$class_map{$_} = CHAR_ALPHA         for split //, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+$class_map{$_} = CHAR_ALPHA         for split //, 'abcdefghijklmnopqrstuvwxyz';
+$class_map{$_} = CHAR_ALPHA         for split //, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+$class_map{$_} = CHAR_ALPHA         for split //, '*_#"\'';
 $class_map{$_} = CHAR_BEGIN_NAME    for split //, '/';
 $class_map{$_} = CHAR_BEGIN_ARRAY   for split //, '[';
 $class_map{$_} = CHAR_END_ARRAY     for split //, ']';
@@ -389,7 +390,11 @@ sub get_name {
 
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
-        if ( defined($class) && ($class == CHAR_ALPHA || $class == CHAR_NUM )) {
+        unless (defined($class)) {
+            seek($fh, -1, 1);
+            croak "unknown char $ch at offset " . tell($fh);
+        }
+        if ( $class == CHAR_ALPHA || $class == CHAR_NUM ) {
             $name .= $ch;
             next;
         } else {
@@ -848,7 +853,6 @@ sub get_startxref {
             next;
         }
         $tok = $ch . $tok;
-        print "$tok\n";
     }
 
     croak "startxref not found" unless $tok eq 'startxref';
@@ -2063,6 +2067,7 @@ sub _parse_contents {
     for my $obj ( @$contents ) {
         $stream .= $self->_get_stream_data($obj);
     }
+    debug('stream',$stream);
 
     my $core = $self->{core}->clone(\$stream);
 
@@ -2071,6 +2076,7 @@ sub _parse_contents {
         my ($token,$type) = $core->get_primitive();
         last unless defined($token);
         # print "$type: $token\n";
+        next if $type == Mail::SpamAssassin::PDF::Core::TYPE_COMMENT;
         if ( $type != Mail::SpamAssassin::PDF::Core::TYPE_OP ) {
             push(@params,$token);
             next;
@@ -2241,7 +2247,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.20;
+my $VERSION = 0.21;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

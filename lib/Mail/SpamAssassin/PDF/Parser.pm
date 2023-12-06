@@ -438,6 +438,7 @@ sub _parse_contents {
     for my $obj ( @$contents ) {
         $stream .= $self->_get_stream_data($obj);
     }
+    debug('stream',$stream);
 
     my $core = $self->{core}->clone(\$stream);
 
@@ -446,6 +447,7 @@ sub _parse_contents {
         my ($token,$type) = $core->get_primitive();
         last unless defined($token);
         # print "$type: $token\n";
+        next if $type == Mail::SpamAssassin::PDF::Core::TYPE_COMMENT;
         if ( $type != Mail::SpamAssassin::PDF::Core::TYPE_OP ) {
             push(@params,$token);
             next;
