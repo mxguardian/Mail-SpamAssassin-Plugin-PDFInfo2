@@ -31,6 +31,7 @@ sub save_state {
 
 sub restore_state {
     my $self = shift;
+    croak "Stack underflow" unless @{$self->{stack}};
     $self->{gs} = pop(@{$self->{stack}});
 }
 

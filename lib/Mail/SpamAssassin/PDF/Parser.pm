@@ -382,6 +382,9 @@ sub _parse_contents {
     # Build a dispatch table
     my %dispatch = (
         q  => sub { $context->save_state() },
+        # No mention of 'qq' in the PDF spec, but I've seen it in the wild. I don't know why you'd want to save_state
+        # twice in a row, but it's needed to prevent a stack underflow error.
+        qq  => sub { $context->save_state();$context->save_state(); },
         Q  => sub { $context->restore_state() },
         cm => sub { $context->concat_matrix(@_) },
         Do => sub {
