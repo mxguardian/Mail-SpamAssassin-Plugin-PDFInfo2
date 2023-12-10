@@ -276,16 +276,9 @@ used directly, but rather to be used by other modules in this distribution.
 =cut
 
 use constant CHAR_SPACE             => 0;
-use constant CHAR_NUM               => 1;
-use constant CHAR_ALPHA             => 2;
-use constant CHAR_BEGIN_NAME        => 3;
-use constant CHAR_BEGIN_ARRAY       => 4;
-use constant CHAR_BEGIN_DICT        => 5;
-use constant CHAR_END_ARRAY         => 6;
-use constant CHAR_END_DICT          => 7;
-use constant CHAR_BEGIN_STRING      => 8;
-use constant CHAR_END_STRING        => 9;
-use constant CHAR_BEGIN_COMMENT     => 10;
+use constant CHAR_DELIM1           => 1;
+use constant CHAR_DELIM2           => 2;
+use constant CHAR_REGULAR           => 3;
 
 use constant TYPE_NUM     => 0;
 use constant TYPE_OP      => 1;
@@ -296,6 +289,8 @@ use constant TYPE_ARRAY   => 5;
 use constant TYPE_DICT    => 6;
 use constant TYPE_STREAM  => 7;
 use constant TYPE_COMMENT => 8;
+use constant TYPE_BOOL    => 9;
+use constant TYPE_NULL    => 10;
 
 my %specials = (
     'n' => "\n",
@@ -306,19 +301,10 @@ my %specials = (
 );
 
 my %class_map;
-$class_map{$_} = CHAR_SPACE         for split //, " \n\r\t\f\b";
-$class_map{$_} = CHAR_NUM           for split //, '0123456789.+-';
-$class_map{$_} = CHAR_ALPHA         for split //, 'abcdefghijklmnopqrstuvwxyz';
-$class_map{$_} = CHAR_ALPHA         for split //, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-$class_map{$_} = CHAR_ALPHA         for split //, '*_#"\'';
-$class_map{$_} = CHAR_BEGIN_NAME    for split //, '/';
-$class_map{$_} = CHAR_BEGIN_ARRAY   for split //, '[';
-$class_map{$_} = CHAR_END_ARRAY     for split //, ']';
-$class_map{$_} = CHAR_BEGIN_STRING  for split //, '(';
-$class_map{$_} = CHAR_END_STRING    for split //, ')';
-$class_map{$_} = CHAR_BEGIN_DICT    for split //, '<';
-$class_map{$_} = CHAR_END_DICT      for split //, '>';
-$class_map{$_} = CHAR_BEGIN_COMMENT for split //, '%';
+$class_map{chr($_)} = CHAR_REGULAR  for 0x21..0xFF;
+$class_map{$_} = CHAR_SPACE         for split //, " \n\r\t\f\x{00}";
+$class_map{$_} = CHAR_DELIM1       for split //, '[]()%/';
+$class_map{$_} = CHAR_DELIM2       for split //, '<>';
 
 =item new($fh)
 
@@ -348,6 +334,372 @@ sub clone {
     return $copy;
 }
 
+=item pos($offset)
+
+Sets the file pointer to the specified offset.  If no offset is specified, returns the current offset.
+
+=cut
+
+sub pos {
+    my ($self,$offset) = @_;
+    defined($offset) ? seek($self->{fh},$offset,0) : tell($self->{fh});
+}
+
+=item get_number
+
+Reads a number from the file.  A number can be an integer or a real number. Returns undef if no number is found.
+
+=cut
+
+sub get_number {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    my $offset = tell($fh);
+    my $num = $self->get_token();
+    return unless defined($num);
+
+    if ( $num !~ /^[0-9+.-]+$/ ) {
+        # not a number
+        seek($fh, $offset, 0);
+        return;
+    }
+
+    $num += 0;
+    return wantarray ? ($num,TYPE_NUM) : $num;
+}
+
+=item assert_number($num)
+
+Get the next token from the file and croak if it isn't a number.  If $num is specified, croak if the number doesn't
+match $num.
+
+=cut
+
+sub assert_number {
+    my ($self,$num) = @_;
+    my $fh = $self->{fh};
+
+    my $offset = tell($fh);
+    my $token = $self->get_token();
+    if (!defined($token) ) {
+        # EOF
+        croak "Expected number, got EOF";
+    }
+
+    if ($token !~ /^[0-9+.-]+$/ ) {
+        # not a number
+        seek($fh, $offset, 0);
+        croak "Expected number, got '$token' at offset $offset";
+    }
+
+    $token += 0;
+    if ( defined($num) && $token != $num ) {
+        # not the expected number
+        seek($fh, $offset, 0);
+        croak "Expected number '$num', got '$token' at offset $offset";
+    }
+
+}
+
+=item assert_token($literal)
+
+Get the next token from the file and croak if it doesn't match the specified literal.
+
+=cut
+
+sub assert_token {
+    my ($self,$literal) = @_;
+    my $fh = $self->{fh};
+
+    my $offset = tell($fh);
+    my $token = $self->get_token();
+    if (!defined($token) ) {
+        croak "Expected '$literal', got EOF";
+    }
+    if ($token ne $literal) {
+        seek($fh, $offset, 0);
+        croak "Expected '$literal', got '$token' at offset $offset";
+    }
+    1;
+}
+
+=item get_token
+
+Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
+there are no more tokens. Will croak if an invalid character is encountered.
+
+=cut
+
+sub get_token {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    my $token;
+    while (defined(my $ch = getc($fh))) {
+        my $class = $class_map{$ch};
+        unless (defined($class)) {
+            seek($fh, -1, 1);
+            croak "Invalid character '$ch' at offset " . tell($fh);
+        }
+        if ( $class == CHAR_SPACE ) {
+            if ( defined($token) ) {
+                last;
+            } else {
+                # skip leading whitespace
+                next;
+            }
+        }
+        if ( $class == CHAR_DELIM1 ) {
+            if ( defined($token) ) {
+                seek($fh, -1, 1);
+                last;
+            } else {
+                return $ch;
+            }
+        }
+        if ( $class == CHAR_DELIM2 ) {
+            if (defined($token)) {
+                seek($fh, -1, 1);
+                last;
+            } else {
+                my $ch2 = getc($fh);
+                if (defined($ch2) && $ch2 eq $ch) {
+                    return $ch . $ch2;
+                } else {
+                    seek($fh, -1, 1);
+                    return $ch;
+                }
+            }
+        }
+        $token .= $ch;
+    }
+
+    return $token;
+}
+
+=item get_primitive
+
+Reads a primitive object from the file.  A primitive object can be a number, string, name, array, dictionary,
+or reference.
+
+=cut
+
+sub get_primitive {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+NEXT_TOKEN:
+    my $token = $self->get_token();
+    return unless defined($token);
+    if ( $token eq '/' ) {
+        return $self->_get_name();
+    }
+    if ( $token eq '<' ) {
+        return $self->_get_hex_string();
+    }
+    if ( $token eq '(' ) {
+        return $self->_get_string();
+    }
+    if ( $token eq '[' ) {
+        return $self->_get_array();
+    }
+    if ( $token eq '<<' ) {
+        return $self->_get_dict();
+    }
+    if ( $token eq '%' ) {
+        # skip comments
+        $self->get_line();
+        goto NEXT_TOKEN;
+    }
+    if ( $token =~ /^[0-9]+$/ ) {
+        my $offset = tell($fh);
+        my $t2 = $self->get_token();
+        if ( defined($t2) && $t2 =~ /^[0-9]+$/ ) {
+            my $t3 = $self->get_token();
+            if ( defined($t3) && $t3 eq 'R') {
+                $token = $token . ' ' . $t2 . ' ' . $t3;
+                return wantarray ? ($token,TYPE_REF) : $token;
+            }
+        }
+        seek($fh, $offset, 0);
+        return wantarray ? ($token,TYPE_NUM) : $token;
+    }
+    if ( $token =~ /^[0-9.+-]+$/ ) {
+        return wantarray ? ($token,TYPE_NUM) : $token;
+    }
+    if ( $token =~ /^true|false$/ ) {
+        return wantarray ? ($token,TYPE_BOOL) : $token;
+    }
+    if ( $token =~ /^null$/ ) {
+        return wantarray ? ($token,TYPE_NULL) : $token;
+    }
+
+    return wantarray ? ($token,TYPE_OP) : $token;
+
+
+}
+
+=item get_line
+
+Reads a line from the file.  A line is a sequence of characters terminated by a line feed, a carriage return, or
+a carriage return/line feed combo. The returned string will include the newline character(s).  The file pointer is left
+at the first character after the line.
+
+=cut
+
+sub get_line {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+    my $line;
+    my $limit = 1024;
+    while (defined(my $ch = getc($fh)) && $limit--) {
+        $line .= $ch;
+        if ($ch eq "\n") {
+            last;
+        } elsif ($ch eq "\r") {
+            my $ch2 = getc($fh);
+            if (defined($ch2) && $ch2 eq "\n") {
+                $line .= $ch2;
+                last;
+            } else {
+                seek($fh, -1, 1);
+                return $line;
+            }
+        }
+    }
+
+    return $line;
+}
+
+sub get_version {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    seek($fh, 0, 0);
+    my $version = $self->get_line();
+    $version =~  /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
+    return $1;
+
+}
+
+=item get_startxref
+
+Reads the startxref value from the end of the file. Will croak if the startxref value is not found or is invalid.
+
+=cut
+
+sub get_startxref {
+    my ($self) = @_;
+    my $fh = $self->{fh};
+
+    # read backwards from the end of the file looking for 'startxref'
+    my $tok = '';
+    my $pos = -1;
+    my $limit = 1024;
+    while ($limit--) {
+        seek($fh,$pos--,2);
+        my $ch = getc($fh);
+        last unless defined($ch);
+        if ( $ch =~ /\s/ ) {
+            if ( $tok eq 'startxref' ) {
+                seek($fh, 9, 1);
+                last;
+            }
+            $tok = '';
+            next;
+        }
+        $tok = $ch . $tok;
+    }
+
+    croak "startxref not found" unless $tok eq 'startxref';
+
+    my $xref = $self->get_number();
+    croak "Invalid startxref" unless defined($xref);
+
+    eval {
+        $self->assert_token('%');
+        $self->assert_token('%');
+        $self->assert_token('EOF');
+        1;
+    } or do {
+        croak "Invalid startxref. EOF marker not found";
+    };
+
+    return $xref;
+
+}
+
+=item get_string
+
+Reads a string from the file.  A string is a sequence of characters enclosed in parentheses.
+
+=cut
+
+
+sub get_string {
+    my ($self) = @_;
+    $self->assert_token('(');
+    return $self->_get_string();
+}
+
+=item get_hex_string
+
+Reads a hex string from the file.  A hex string is a sequence of hexadecimal digits enclosed in angle brackets with
+optional whitespace between the digits. If there is an odd number of hex digits, a zero is appended to the string. The
+string is then converted to binary and decrypted if necessary. If the string begins with a byte order mark (BOM), it
+is converted to UTF-8.
+
+=cut
+
+sub get_hex_string {
+    my ($self) = @_;
+    $self->assert_token('<');
+    return $self->_get_hex_string();
+}
+
+=item get_array
+
+Reads an array from the file.  An array is a sequence of objects enclosed in square brackets.
+
+=cut
+
+sub get_array {
+    my ($self) = @_;
+    $self->assert_token('[');
+    return $self->_get_array();
+}
+
+=item get_dict
+
+Reads a dictionary from the file.  A dictionary is a sequence of key/value pairs enclosed in double angle brackets.
+
+=cut
+
+sub get_dict {
+    my ($self) = @_;
+    $self->assert_token('<<');
+    return $self->_get_dict();
+}
+
+=item get_name
+
+Reads a name from the file.  A name is a sequence of characters beginning with a slash. A name can contain any
+character except whitespace and the characters ()<>[]{}/%. Any character except null (character code 0) may be included
+in a name by writing its 2-digit hexadecimal code, preceded by the number sign character (#)
+
+=cut
+
+sub get_name {
+    my ($self) = @_;
+    $self->assert_token('/');
+    return $self->_get_name();
+}
+
+########################################################################
+# Internal methods
+########################################################################
+
 sub _init {
     my $self = shift;
     if (ref($_[0]) eq 'SCALAR') {
@@ -360,66 +712,9 @@ sub _init {
     }
 }
 
-=item pos($offset)
-
-Sets the file pointer to the specified offset.  If no offset is specified, returns the current offset.
-
-=cut
-
-sub pos {
-    my ($self,$offset) = @_;
-    defined($offset) ? seek($self->{fh},$offset,0) : tell($self->{fh});
-}
-
-=item get_name
-
-Reads a name from the file.  A name is a forward slash followed by a sequence of characters.  The file pointer is left
-at the first character after the name.
-
-=cut
-
-sub get_name {
+sub _get_string {
     my ($self) = @_;
     my $fh = $self->{fh};
-
-    my $name = getc($fh);
-    unless ($name eq '/') {
-        seek($fh, -1, 1);
-        croak "Name not found at offset " . tell($fh);
-    }
-
-    while (defined(my $ch = getc($fh))) {
-        my $class = $class_map{$ch};
-        unless (defined($class)) {
-            seek($fh, -1, 1);
-            croak "unknown char $ch at offset " . tell($fh);
-        }
-        if ( $class == CHAR_ALPHA || $class == CHAR_NUM ) {
-            $name .= $ch;
-            next;
-        } else {
-            seek($fh, -1, 1) unless $class == CHAR_SPACE;
-            last;
-        }
-    }
-    return wantarray ? ($name,TYPE_NAME) : $name;
-}
-
-=item get_string
-
-Reads a string from the file.  A string is a sequence of characters enclosed in parentheses.  The file pointer is left
-at the first character after the string.
-
-=cut
-
-sub get_string {
-    my ($self) = @_;
-    my $fh = $self->{fh};
-
-    unless (getc($fh) eq '(') {
-        seek($fh, -1, 1);
-        croak "string not found at offset " . tell($fh);
-    }
 
     my $depth = 1;
     my $str = '';
@@ -483,137 +778,9 @@ sub get_string {
     return wantarray ? ($str,TYPE_STRING) : $str;
 }
 
-=item get_number
-
-Reads a number from the file.  A number can be an integer or a real number.  The file pointer is left at the first
-character after the number. Returns undef if no number is found.
-
-=cut
-
-sub get_number {
+sub _get_hex_string {
     my ($self) = @_;
     my $fh = $self->{fh};
-
-    my $num = '';
-    while (defined(my $ch = getc($fh))) {
-        my $class = $class_map{$ch};
-        unless (defined($class)) {
-            seek($fh, -1, 1);
-            croak "unknown char $ch at offset " . tell($fh);
-        }
-        if ( $class == CHAR_NUM) {
-            $num .= $ch;
-            next;
-        } elsif ( length($num) ) {
-            seek($fh, -1, 1) unless $class == CHAR_SPACE;
-            last;
-        } elsif ( $class == CHAR_SPACE) {
-            # skip leading spaces
-            next;
-        } else {
-            # not a number
-            seek($fh, -1, 1);
-            return;
-        }
-    }
-    $num += 0;
-    return wantarray ? ($num,TYPE_NUM) : $num;
-}
-
-sub assert_number {
-    my ($self,$num) = @_;
-    my $fh = $self->{fh};
-
-    my $offset = tell($fh);
-    my $token = $self->get_token();
-    if (!defined($token) ) {
-        seek($fh, $offset, 0);
-        croak "Expected number, got EOF at offset $offset";
-    }
-    if ($token !~ /^[0-9+.-]+$/ ) {
-        seek($fh, $offset, 0);
-        croak "Expected number, got '$token' at offset $offset";
-    }
-    if ( defined($num) && $token != $num ) {
-        seek($fh, $offset, 0);
-        croak "Expected number '$num', got '$token' at offset $offset";
-    }
-
-}
-
-=item assert_token($literal)
-
-Get the next token from the file and croak if it doesn't match the specified literal.
-
-=cut
-
-sub assert_token {
-    my ($self,$literal) = @_;
-    my $fh = $self->{fh};
-
-    my $offset = tell($fh);
-    my $token = $self->get_token();
-    if (!defined($token) ) {
-        croak "Expected '$literal', got EOF at offset " . tell($fh);
-    }
-    if ($token ne $literal) {
-        seek($fh, $offset, 0);
-        croak "Expected '$literal', got '$token' at offset " . tell($fh);
-    }
-    1;
-}
-
-=item get_token
-
-Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
-there are no more tokens. Will croak if an invalid character is encountered.
-
-=cut
-
-sub get_token {
-    my ($self) = @_;
-    my $fh = $self->{fh};
-
-    my $token = undef;
-    my $last_class;
-    while (defined(my $ch = getc($fh))) {
-        my $class = $class_map{$ch};
-        unless (defined($class)) {
-            seek($fh, -1, 1);
-            croak "unknown char $ch at offset " . tell($fh);
-        }
-        if ( defined($last_class) && ($class != $last_class or $ch eq '/') ) {
-            if ($last_class == CHAR_SPACE) {
-                # skip leading spaces
-                $token = '';
-            } else {
-                seek($fh, -1, 1) unless $class == CHAR_SPACE;
-                last;
-            }
-        }
-        $last_class = $class;
-        $token .= $ch;
-    }
-
-    return wantarray ? ($token,$last_class) : $token;
-}
-
-=item get_hex_string
-
-Reads a hex string from the file.  A hex string is a sequence of hexadecimal digits enclosed in angle brackets with
-optional whitespace between the digits. The digits must be an even number of characters.  The file pointer is left at
-the first character after the string.
-
-=cut
-
-sub get_hex_string {
-    my ($self) = @_;
-    my $fh = $self->{fh};
-
-    unless (getc($fh) eq '<') {
-        seek($fh, -1, 1);
-        croak "hex string not found at offset " . tell($fh);
-    }
 
     my $hex = '';
     while ( defined(my $ch = getc($fh)) ) {
@@ -622,7 +789,8 @@ sub get_hex_string {
         croak "Invalid hex string at offset " . tell($fh) unless $ch =~ /[0-9a-fA-F]/;
         $hex .= $ch;
     }
-    croak "Odd number of hex digits at offset " . tell($fh) if length($hex) % 2 == 1;
+    # pad with a zero if the length is odd
+    $hex .= '0' if length($hex) % 2;
     my $str = pack("H*",$hex);
 
     # decrypt
@@ -638,22 +806,20 @@ sub get_hex_string {
     return  wantarray ? ($str,TYPE_STRING) : $str;
 }
 
-=item get_array
+=item _get_array
 
 Reads an array from the file.  An array is a sequence of objects enclosed in square brackets.  The file pointer is left
 at the first character after the array.
 
 =cut
 
-sub get_array {
+sub _get_array {
     my ($self) = @_;
-    my $fh = $self->{fh};
     my @array;
 
-    $self->assert_token('[');
-
     while () {
-        ($_) = $self->get_primitive($fh);
+        local $_ = $self->get_primitive();
+        croak "Unexpected end of file" unless defined($_);
         last if $_ eq ']';
         push(@array,$_);
     }
@@ -661,22 +827,13 @@ sub get_array {
     return wantarray ? (\@array,TYPE_ARRAY) : \@array;
 }
 
-=item get_dict
-
-Reads a dictionary from the file.  A dictionary is a sequence of key/value pairs enclosed in double angle brackets.  The
-file pointer is left at the first character after the dictionary.
-
-=cut
-
-sub get_dict {
+sub _get_dict {
     my ($self) = @_;
     my $fh = $self->{fh};
     my @array;
 
-    $self->assert_token('<<');
-
     while () {
-        $_ = $self->get_primitive();
+        local $_ = $self->get_primitive();
         croak "Unexpected end of file" unless defined($_);
         last if $_ eq '>>';
         push(@array,$_);
@@ -691,24 +848,20 @@ sub get_dict {
     #   stream\r\n
     #   stream\n
     #   stream\r
+    # get_line() will handle all of these cases for us
 
-    my $offset = tell($fh);
-    $_ = $self->get_token();
-    if (defined($_) && $_ eq 'stream') {
-        for (1..2) {
-            my $ch = getc($fh);
-            if ( !defined($ch) or $ch eq "\n") {
-                last;
-            } elsif ( $ch eq "\r" ) {
-                next;
-            } else {
-                seek($fh, -1, 1);
-                last;
+    if ( exists($dict{'/Length'})) {
+        # check for stream data following the dictionary
+        my $offset = tell($fh);
+        while (defined(my $line = $self->get_line())) {
+            next if $line =~ /^\s*$/; # skip blank lines
+            if ($line =~ /^\s*stream\b/) {
+                $dict{_stream_offset} = tell($fh);
+                return wantarray ? (\%dict, TYPE_STREAM) : \%dict;
             }
+            last;
         }
-        $dict{_stream_offset} = tell($fh);
-        return wantarray ? (\%dict,TYPE_STREAM) : \%dict;
-    } else {
+        # not a stream dictionary
         seek($fh, $offset, 0);
     }
 
@@ -716,270 +869,30 @@ sub get_dict {
 
 }
 
-=item get_primitive
-
-Reads a primitive object from the file.  A primitive object can be a number, string, name, array, dictionary,
-or reference. The file pointer is left at the first character after the object.
-
-=cut
-
-sub get_primitive {
+sub _get_name {
     my ($self) = @_;
     my $fh = $self->{fh};
 
-    my $last_class;
-    my $buf = '';
-    while (defined(my $ch = getc($fh))) {
+    my $name = '/';
+    while ( defined(my $ch = getc($fh)) ) {
         my $class = $class_map{$ch};
-        die "unknown char $ch" unless defined($class);
-        if ( $class == CHAR_NUM ) {
-            return $self->get_num_or_ref($ch);
-        }
-        if ( defined($last_class) && $class != $last_class ) {
-            if ($last_class == CHAR_SPACE ) {
-                $buf = '';
-            } else {
-                seek($fh, -1, 1);
-                last;
-            }
-        }
-        if ( $class == CHAR_BEGIN_NAME ) {
+        unless (defined($class)) {
             seek($fh, -1, 1);
-            return $self->get_name($fh);
+            croak "Invalid character '$ch' at offset " . tell($fh);
         }
-        if ( $class == CHAR_BEGIN_DICT ) {
-            if (getc($fh) eq $ch) {
-                seek($fh, -2, 1);
-                return $self->get_dict($fh);
-            } else {
-                seek($fh, -2, 1);
-                return $self->get_hex_string($fh);
-            }
-        }
-        if ( $class == CHAR_BEGIN_ARRAY ) {
+        last if $class == CHAR_SPACE;
+        if ( $class != CHAR_REGULAR ) {
             seek($fh, -1, 1);
-            return $self->get_array($fh);
-        }
-        if ( $class == CHAR_BEGIN_STRING ) {
-            seek($fh, -1, 1);
-            return $self->get_string($fh);
-        }
-        if ( $class == CHAR_END_ARRAY || $class == CHAR_END_STRING ) {
-            return wantarray ? ($ch,$class) : $ch;
-        }
-        if ( $class == CHAR_END_DICT ) {
-            if ( getc($fh) eq $ch ) {
-                return wantarray ? ('>>',CHAR_END_DICT) : '>>';
-            }
-            seek($fh, -1, 1);
-            return wantarray ? ($ch,CHAR_END_STRING) : $ch;
-        }
-        if ( $class == CHAR_BEGIN_COMMENT ) {
-            seek($fh, -1, 1);
-            return $self->get_comment($fh);
-        }
-        $buf .= $ch;
-        $last_class = $class;
-    }
-
-    if (!defined($last_class) || $last_class eq CHAR_SPACE) {
-        # EOF
-        return (undef,undef);
-    } elsif ( $last_class == CHAR_ALPHA ) {
-        return wantarray ? ($buf,TYPE_OP) : $buf;
-    } else {
-        # shouldn't happen
-        return wantarray ? ($buf,undef) : $buf;
-    }
-
-}
-
-=item get_line
-
-Reads a line from the file.  A line is a sequence of characters terminated by a line feed, a carriage return, or
-a carriage return/line feed combo. The returned string will include the newline character(s).  The file pointer is left
-at the first character after the line.
-
-=cut
-
-sub get_line {
-    my ($self) = @_;
-    my $fh = $self->{fh};
-    my $line;
-    my $limit = 1024;
-    while (defined(my $ch = getc($fh)) && $limit--) {
-        $line .= $ch;
-        if ($ch eq "\n") {
             last;
-        } elsif ($ch eq "\r") {
-            my $ch2 = getc($fh);
-            if (defined($ch2) && $ch2 eq "\n") {
-                $line .= $ch2;
-                last;
-            } else {
-                seek($fh, -1, 1);
-                return $line;
-            }
         }
+        $name .= $ch;
     }
+    $name =~ s/#([0-9a-fA-F]{2})/chr(hex($1))/ge;
 
-    return $line;
-}
-
-=item get_startxref
-
-Reads the startxref value from the end of the file. Will croak if the startxref value is not found or is invalid.
-
-=cut
-
-sub get_startxref {
-    my ($self) = @_;
-    my $fh = $self->{fh};
-
-    # read backwards from the end of the file looking for 'startxref'
-    my $tok = '';
-    my $pos = -1;
-    my $limit = 1024;
-    while ($limit--) {
-        seek($fh,$pos--,2);
-        my $ch = getc($fh);
-        last unless defined($ch);
-        if ( $ch =~ /\s/ ) {
-            if ( $tok eq 'startxref' ) {
-                seek($fh, 9, 1);
-                last;
-            }
-            $tok = '';
-            next;
-        }
-        $tok = $ch . $tok;
-    }
-
-    croak "startxref not found" unless $tok eq 'startxref';
-
-    my $xref = $self->get_number();
-    croak "Invalid startxref" unless defined($xref);
-
-    eval {
-        $self->assert_token('%%');
-        $self->assert_token('EOF');
-        1;
-    } or do {
-        croak "Invalid startxref. EOF marker not found";
-    };
-
-    return $xref;
+    return wantarray ? ($name,TYPE_NAME) : $name;
 
 }
 
-=item get_comment
-
-Reads a comment from the file.  A comment is a '%' sign followed by a sequence of characters terminated by a line feed,
-a carriage return, or a carriage return/line feed combo. The returned string will include the '%' and newline
-character(s).  The file pointer is left at the first character after the comment. Retuns undef if no comment is found.
-
-=cut
-
-sub get_comment {
-    my ($self) = @_;
-    my $comment = $self->get_line();
-    return unless defined $comment;
-    if ( substr($comment,0,1) ne '%' ) {
-        seek($self->{fh}, -length($comment), 1);
-        return;
-    }
-    return wantarray ? ($comment,TYPE_COMMENT) : $comment;
-}
-
-=item get_num_or_ref($fh,$ch)
-
-Reads a number or reference from the file. A number can be an integer or a real number. A reference is two non-negative
-integers separated by a space, followed by 'R' (eg. '0 15 R').  The file pointer is left at the first character after
-the number or reference.
-
-If $ch is provided, it is used as the first character of the number or reference.  Otherwise, the first character is
-read from the file.
-
-=cut
-
-sub get_num_or_ref {
-    my ($self,$ch) = @_;
-    my $fh = $self->{fh};
-    my $state = 0;
-    my ($buf,$num,$ref) = ('',undef,'');
-    $ch = getc($fh) unless defined($ch);
-    my $last_class = $class_map{$ch};
-    while () {
-        if ( $ch =~ /[+-.]/ ) {
-            # real number detected
-            if ($state > 0) {
-                # we already got the first number so we're done
-                last;
-            } else {
-                # stop after finding the first number
-                $state = -1;
-            }
-        }
-        my $class = $class_map{$ch};
-        die "unknown char $ch at offset ".(tell($fh)-1) unless defined($class);
-        if ( defined($last_class) && ($class != $last_class or $ch eq '/' ) ) {
-
-            if ( $last_class == CHAR_SPACE ) {
-                # skip leading spaces
-                $buf = '';
-            } elsif ( $last_class == CHAR_NUM ) {
-                if ($class != CHAR_SPACE) {
-                    # number followed by non-space so we're done
-                    $num = $buf unless defined($num);
-                    seek($fh, -1, 1);
-                    last;
-                } elsif ($state == -1) {
-                    # found a real number so we're done
-                    $num = $buf;
-                    last;
-                } elsif ($state == 0) {
-                    # save the first number and keep looking
-                    $num = $buf;
-                    $buf = '';
-                    $state = 1;
-                } elsif ($state == 1) {
-                    # found the second number so keep looking
-                    $state = 2;
-                }
-                else {
-                    last;
-                }
-            } elsif ( $last_class == CHAR_ALPHA ) {
-                if ( $state == 2 && $buf eq 'R' ) {
-                    seek($fh, -1, 1);
-                    return wantarray ? ($ref,'ref') : $ref;
-                } else {
-                    # two numbers but no 'R'
-                    last;
-                }
-            } else {
-                last;
-            }
-
-        }
-        $last_class = $class;
-        $buf .= $ch;
-        $ref .= $ch;
-        last unless defined($ch = getc($fh));
-    }
-    if ( $state == 2 && $buf eq 'R' ) {
-        return wantarray ? ($ref,TYPE_REF) : $ref;
-    }
-
-    seek($fh, -length($ref)+length($num), 1);
-    return wantarray ? ($num,TYPE_NUM) : $num;
-}
-
-sub unquote_name {
-    my $value = shift;
-    $value =~ s/#([\da-f]{2})/chr(hex($1))/ige;
-    return $value;
-}
 
 =back
 
@@ -1225,17 +1138,19 @@ sub parse_end {
     # Start at beginning, get comments + first object
     $md5->reset();
     $core->pos(0);
-    my $line;
+    my $line; my $pos = 0;
     while (defined($line = $core->get_line())) {
         next if $line =~ /^\s*$/; # skip blank lines
         last unless $line =~ /^%/;
         # print "> $line\n";
         $md5->add($line);
+        $pos += length($line);
     }
 
     if ( $line =~ /^\s*(\d+ \d+ obj\s*)/g ) {
         # print "> $1\n";
         $md5->add($1); # include object number
+        $parser->{core}->pos($pos + $+[0]);
         my $obj = $parser->{core}->get_primitive();
         my $str = $self->serialize_fuzzy($obj);
         # print "> $str\n";
@@ -1557,7 +1472,8 @@ sub _hex {
 package Mail::SpamAssassin::PDF::Filter::FlateDecode;
 use strict;
 use warnings FATAL => 'all';
-use Compress::Zlib;
+# use Compress::Zlib;
+use Compress::Raw::Zlib qw(Z_OK Z_STREAM_END);
 
 sub new {
     my ($class,$params) = @_;
@@ -1575,7 +1491,13 @@ sub new {
 sub decode {
     my ($self,$data) = @_;
 
-    $data = uncompress($data);
+    my $i = new Compress::Raw::Zlib::Inflate( -ConsumeInput => 0 );
+    my $uncompressed = '';
+    my $status = $i->inflate($data,$uncompressed);
+    unless ( $status == Z_OK || $status == Z_STREAM_END ) {
+        die "Error inflating data: " . $i->msg;
+    }
+    $data = $uncompressed;
     return $data unless defined($self->{predictor});
 
     my $out;
@@ -1692,8 +1614,7 @@ sub parse {
     $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
 
     # Parse header
-    $self->{core}->get_line() =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
-    $self->{version} = $1;
+    $self->{version} = $self->{core}->get_version();
 
     local $SIG{ALRM} = sub {die "__TIMEOUT__\n"};
     alarm($self->{timeout}) if (defined($self->{timeout}));
@@ -1701,27 +1622,40 @@ sub parse {
     eval {
 
         # Parse cross-reference table (and trailer)
+        debug('trace',"Calling _parse_xref");
         $self->_parse_xref($self->{core}->get_startxref());
+        debug('xref',$self->{xref});
 
         # Parse encryption dictionary
+        debug('trace',"Calling _parse_encrypt");
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
 
         # Parse info object
+        debug('trace',"Calling _parse_info");
         $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
         $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
 
         # Parse catalog
         my $root = $self->{trailer}->{'/Root'};
         if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
+            $root->{'/OpenAction'} = $self->_dereference($root->{'/OpenAction'});
+            debug('trace',"Calling _parse_action");
             $self->_parse_action($root->{'/OpenAction'});
         }
 
-        $self->{context}->parse_begin($self) if $self->{context}->can('parse_begin');
+        if ($self->{context}->can('parse_begin')) {
+            debug('trace',"Calling _parse_begin");
+            $self->{context}->parse_begin($self);
+        }
 
         # Parse page tree
+        debug('trace',"Calling _parse_pages");
         $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
 
-        $self->{context}->parse_end($self) if $self->{context}->can('parse_end');
+        if ($self->{context}->can('parse_end')) {
+            debug('trace',"Calling _parse_end");
+            $self->{context}->parse_end($self);
+        }
 
         1;
     } or do {
@@ -1760,21 +1694,24 @@ sub _parse_xref {
     my $core = $self->{core};
 
     $core->pos($pos);
-    my ($token,$type) = $core->get_token();
+    my $token = $core->get_token();
     if ( $token ne 'xref' ) {
         # not a cross-reference table. May be a cross-reference stream
-        if ( $type != Mail::SpamAssassin::PDF::Core::CHAR_NUM ) {
+        if ( $token !~ /^\d+$/ ) {
             die "xref not found at offset $pos";
         }
+        debug('xref','Parsing xref stream at offset '.$pos);
         $core->assert_number();
         $core->assert_token('obj');
         return $self->_parse_xref_stream();
     }
+    debug('xref','Parsing xref table at offset '.$pos);
 
     while () {
         my $start = eval { $core->get_number(); };
         last unless defined($start);
         my $count = $core->get_number();
+        debug('xref',"start=$start count=$count");
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
             my $offset = $core->get_number();
             my $gen = $core->get_number();
@@ -1805,28 +1742,29 @@ sub _parse_xref_stream {
     my ($self) = @_;
 
     my $xref = $self->{core}->get_dict();
-    my ($start,$count) = (0,$xref->{'/Size'});
-    if ( defined($xref->{'/Index'}) ) {
-        $start = $xref->{'/Index'}->[0];
-        $count = $xref->{'/Index'}->[1];
-    }
+    my $data = $self->_get_stream_data($xref);
     my $width = $xref->{'/W'}->[0] + $xref->{'/W'}->[1] + $xref->{'/W'}->[2];
     my $template = 'H'.($xref->{'/W'}->[0]*2).'H'.($xref->{'/W'}->[1]*2).'H'.($xref->{'/W'}->[2]*2);
+    my @index = defined($xref->{'/Index'}) ? @{$xref->{'/Index'}} : (0,$xref->{'/Size'});
+    die "Odd number of elements in index while parsing xref stream" if (scalar(@index) % 2 != 0);
 
-    my $data = $self->_get_stream_data($xref);
-
-    for ( my ($i,$n,$o)=($start,0,0); $n<$count; $i++,$n++,$o+=$width ) {
-        my ($type,@fields) = map { hex($_) } unpack("x$o $template",$data);
-        if ( $type == 0 ) {
-            next;
-        } elsif ( $type == 1 ) {
-            my ($offset,$gen) = @fields;
-            my $key = "$i $gen R";
-            $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
-        } elsif ( $type == 2 ) {
-            my ($obj,$index) = @fields;
-            my $key = "$i 0 R";
-            $self->{xref}->{$key} = [ "$obj 0 R", $index ] unless defined($self->{xref}->{$key});
+    my $o = 0;
+    for (my $i=0;$i<scalar(@index);$i+=2) {
+        my ($start,$count) = ($index[$i],$index[$i+1]);
+        for ( my ($n,$c)=($start,0); $c<$count; $n++,$c++ ) {
+            my ($type,@fields) = map { hex($_) } unpack("x$o $template",$data);
+            $o+=$width;
+            if ( $type == 0 ) {
+                next;
+            } elsif ( $type == 1 ) {
+                my ($offset,$gen) = @fields;
+                my $key = "$n $gen R";
+                $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
+            } elsif ( $type == 2 ) {
+                my ($obj,$index) = @fields;
+                my $key = "$n 0 R";
+                $self->{xref}->{$key} = [ "$obj 0 R", $index ]; # unless defined($self->{xref}->{$key});
+            }
         }
     }
 
@@ -1883,7 +1821,15 @@ sub _parse_pages {
         $node->{$_} = $parent_node->{$_} unless defined($node->{$_});
     }
 
+    if ( !defined($node->{'/Type'}) ) {
+        # Type is required but sometimes it's missing
+        $node->{'/Type'} = defined($node->{'/Kids'}) ? '/Pages' :
+                           defined($node->{'/Contents'}) ? '/Page' :
+                           die "Page type not found";
+    }
+
     if ( $node->{'/Type'} eq '/Pages' ) {
+        $node->{'/Kids'} = $self->_dereference($node->{'/Kids'});
         $self->_parse_pages($_, $node) for (@{$node->{'/Kids'}});
     } elsif ( $node->{'/Type'} eq '/Page' ) {
         $node->{'/MediaBox'} = $self->_dereference($node->{'/MediaBox'});
@@ -1997,7 +1943,11 @@ sub _parse_contents {
                 $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
             } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
                 $context->save_state();
-                $context->concat_matrix(@{$xobj->{'/Matrix'}}) if defined($xobj->{'/Matrix'});
+                if (defined($xobj->{'/Matrix'})) {
+                    my $matrix = $xobj->{'/Matrix'};
+                    $matrix = $self->_dereference($matrix) if ref($matrix) ne 'ARRAY';
+                    $context->concat_matrix(@{$matrix});
+                }
                 $self->_parse_contents($xobj, $page, $xobj->{'/Resources'});
                 $context->restore_state();
             }
@@ -2075,8 +2025,7 @@ sub _parse_contents {
     while () {
         my ($token,$type) = $core->get_primitive();
         last unless defined($token);
-        # print "$type: $token\n";
-        next if $type == Mail::SpamAssassin::PDF::Core::TYPE_COMMENT;
+        debug('tokens',"$type: $token");
         if ( $type != Mail::SpamAssassin::PDF::Core::TYPE_OP ) {
             push(@params,$token);
             next;
@@ -2129,6 +2078,7 @@ sub _get_obj {
         my $obj;
         if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
             my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
+            debug('trace',"Getting compressed object $ref");
             $obj = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
         } else {
             $core->pos($self->{xref}->{$ref});
@@ -2137,6 +2087,7 @@ sub _get_obj {
                 $core->get_number();
                 $core->assert_token('obj');
                 $obj = $core->get_primitive();
+                1;
             } or die "Error getting object $ref: $@";
         }
         if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
@@ -2168,6 +2119,7 @@ sub _get_compressed_obj {
 
     if ( !defined($stream_obj->{core}) ) {
         my $data = $self->_get_stream_data($stream_obj);
+        die "Error getting stream data for object $ref" unless defined($data);
         my $core = $stream_obj->{core} = $self->{core}->clone(\$data);
         my @array;
         while ( defined($_ = $core->get_number()) ) {
@@ -2183,17 +2135,24 @@ sub _get_compressed_obj {
 
 sub _get_stream_data {
     my ($self,$stream_obj) = @_;
-    $stream_obj = $self->_dereference($stream_obj);
-    return unless defined($stream_obj);
+    local $_ = $self->_dereference($stream_obj);
+    unless (defined($_)) {
+        die "Error getting stream data. Object not found\n" . Dumper($stream_obj);
+    }
 
     # not a stream object
-    return undef unless ref($stream_obj) eq 'HASH' && defined($stream_obj->{_stream_offset});
+    unless (ref($_) eq 'HASH' && defined($_->{_stream_offset})) {
+        die "Error getting stream data. Object is not a stream\n" . Dumper($stream_obj);
+    }
 
+    $stream_obj = $_;
     my $offset = $stream_obj->{_stream_offset};
     my $length = $self->_dereference($stream_obj->{'/Length'});
-    my @filters = !defined($stream_obj->{'/Filter'}) ? ()
-        : ref($stream_obj->{'/Filter'}) eq 'ARRAY' ? @{$stream_obj->{'/Filter'}}
-        : ( $stream_obj->{'/Filter'} );
+    my @filters;
+    if ( defined($stream_obj->{'/Filter'}) ) {
+        my $filter = $self->_dereference($stream_obj->{'/Filter'});
+        @filters = ref($filter) eq 'ARRAY' ? @{$filter} : ( $filter );
+    }
 
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
@@ -2207,6 +2166,7 @@ sub _get_stream_data {
     $self->{core}->assert_token('endstream');
 
     foreach my $filter (@filters) {
+        $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
             $stream_data = $f->decode($stream_data);
@@ -2247,7 +2207,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.21;
+my $VERSION = 0.22;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

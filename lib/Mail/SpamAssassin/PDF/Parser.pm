@@ -63,8 +63,7 @@ sub parse {
     $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
 
     # Parse header
-    $self->{core}->get_line() =~ /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
-    $self->{version} = $1;
+    $self->{version} = $self->{core}->get_version();
 
     local $SIG{ALRM} = sub {die "__TIMEOUT__\n"};
     alarm($self->{timeout}) if (defined($self->{timeout}));
@@ -72,27 +71,40 @@ sub parse {
     eval {
 
         # Parse cross-reference table (and trailer)
+        debug('trace',"Calling _parse_xref");
         $self->_parse_xref($self->{core}->get_startxref());
+        debug('xref',$self->{xref});
 
         # Parse encryption dictionary
+        debug('trace',"Calling _parse_encrypt");
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
 
         # Parse info object
+        debug('trace',"Calling _parse_info");
         $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
         $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
 
         # Parse catalog
         my $root = $self->{trailer}->{'/Root'};
         if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
+            $root->{'/OpenAction'} = $self->_dereference($root->{'/OpenAction'});
+            debug('trace',"Calling _parse_action");
             $self->_parse_action($root->{'/OpenAction'});
         }
 
-        $self->{context}->parse_begin($self) if $self->{context}->can('parse_begin');
+        if ($self->{context}->can('parse_begin')) {
+            debug('trace',"Calling _parse_begin");
+            $self->{context}->parse_begin($self);
+        }
 
         # Parse page tree
+        debug('trace',"Calling _parse_pages");
         $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
 
-        $self->{context}->parse_end($self) if $self->{context}->can('parse_end');
+        if ($self->{context}->can('parse_end')) {
+            debug('trace',"Calling _parse_end");
+            $self->{context}->parse_end($self);
+        }
 
         1;
     } or do {
@@ -131,21 +143,24 @@ sub _parse_xref {
     my $core = $self->{core};
 
     $core->pos($pos);
-    my ($token,$type) = $core->get_token();
+    my $token = $core->get_token();
     if ( $token ne 'xref' ) {
         # not a cross-reference table. May be a cross-reference stream
-        if ( $type != Mail::SpamAssassin::PDF::Core::CHAR_NUM ) {
+        if ( $token !~ /^\d+$/ ) {
             die "xref not found at offset $pos";
         }
+        debug('xref','Parsing xref stream at offset '.$pos);
         $core->assert_number();
         $core->assert_token('obj');
         return $self->_parse_xref_stream();
     }
+    debug('xref','Parsing xref table at offset '.$pos);
 
     while () {
         my $start = eval { $core->get_number(); };
         last unless defined($start);
         my $count = $core->get_number();
+        debug('xref',"start=$start count=$count");
         for (my ($i,$n)=($start,0);$n<$count;$i++,$n++) {
             my $offset = $core->get_number();
             my $gen = $core->get_number();
@@ -176,28 +191,29 @@ sub _parse_xref_stream {
     my ($self) = @_;
 
     my $xref = $self->{core}->get_dict();
-    my ($start,$count) = (0,$xref->{'/Size'});
-    if ( defined($xref->{'/Index'}) ) {
-        $start = $xref->{'/Index'}->[0];
-        $count = $xref->{'/Index'}->[1];
-    }
+    my $data = $self->_get_stream_data($xref);
     my $width = $xref->{'/W'}->[0] + $xref->{'/W'}->[1] + $xref->{'/W'}->[2];
     my $template = 'H'.($xref->{'/W'}->[0]*2).'H'.($xref->{'/W'}->[1]*2).'H'.($xref->{'/W'}->[2]*2);
+    my @index = defined($xref->{'/Index'}) ? @{$xref->{'/Index'}} : (0,$xref->{'/Size'});
+    die "Odd number of elements in index while parsing xref stream" if (scalar(@index) % 2 != 0);
 
-    my $data = $self->_get_stream_data($xref);
-
-    for ( my ($i,$n,$o)=($start,0,0); $n<$count; $i++,$n++,$o+=$width ) {
-        my ($type,@fields) = map { hex($_) } unpack("x$o $template",$data);
-        if ( $type == 0 ) {
-            next;
-        } elsif ( $type == 1 ) {
-            my ($offset,$gen) = @fields;
-            my $key = "$i $gen R";
-            $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
-        } elsif ( $type == 2 ) {
-            my ($obj,$index) = @fields;
-            my $key = "$i 0 R";
-            $self->{xref}->{$key} = [ "$obj 0 R", $index ] unless defined($self->{xref}->{$key});
+    my $o = 0;
+    for (my $i=0;$i<scalar(@index);$i+=2) {
+        my ($start,$count) = ($index[$i],$index[$i+1]);
+        for ( my ($n,$c)=($start,0); $c<$count; $n++,$c++ ) {
+            my ($type,@fields) = map { hex($_) } unpack("x$o $template",$data);
+            $o+=$width;
+            if ( $type == 0 ) {
+                next;
+            } elsif ( $type == 1 ) {
+                my ($offset,$gen) = @fields;
+                my $key = "$n $gen R";
+                $self->{xref}->{$key} = $offset unless defined($self->{xref}->{$key});
+            } elsif ( $type == 2 ) {
+                my ($obj,$index) = @fields;
+                my $key = "$n 0 R";
+                $self->{xref}->{$key} = [ "$obj 0 R", $index ]; # unless defined($self->{xref}->{$key});
+            }
         }
     }
 
@@ -254,7 +270,15 @@ sub _parse_pages {
         $node->{$_} = $parent_node->{$_} unless defined($node->{$_});
     }
 
+    if ( !defined($node->{'/Type'}) ) {
+        # Type is required but sometimes it's missing
+        $node->{'/Type'} = defined($node->{'/Kids'}) ? '/Pages' :
+                           defined($node->{'/Contents'}) ? '/Page' :
+                           die "Page type not found";
+    }
+
     if ( $node->{'/Type'} eq '/Pages' ) {
+        $node->{'/Kids'} = $self->_dereference($node->{'/Kids'});
         $self->_parse_pages($_, $node) for (@{$node->{'/Kids'}});
     } elsif ( $node->{'/Type'} eq '/Page' ) {
         $node->{'/MediaBox'} = $self->_dereference($node->{'/MediaBox'});
@@ -368,7 +392,11 @@ sub _parse_contents {
                 $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
             } elsif ( $xobj->{'/Subtype'} eq '/Form' ) {
                 $context->save_state();
-                $context->concat_matrix(@{$xobj->{'/Matrix'}}) if defined($xobj->{'/Matrix'});
+                if (defined($xobj->{'/Matrix'})) {
+                    my $matrix = $xobj->{'/Matrix'};
+                    $matrix = $self->_dereference($matrix) if ref($matrix) ne 'ARRAY';
+                    $context->concat_matrix(@{$matrix});
+                }
                 $self->_parse_contents($xobj, $page, $xobj->{'/Resources'});
                 $context->restore_state();
             }
@@ -446,8 +474,7 @@ sub _parse_contents {
     while () {
         my ($token,$type) = $core->get_primitive();
         last unless defined($token);
-        # print "$type: $token\n";
-        next if $type == Mail::SpamAssassin::PDF::Core::TYPE_COMMENT;
+        debug('tokens',"$type: $token");
         if ( $type != Mail::SpamAssassin::PDF::Core::TYPE_OP ) {
             push(@params,$token);
             next;
@@ -500,6 +527,7 @@ sub _get_obj {
         my $obj;
         if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
             my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
+            debug('trace',"Getting compressed object $ref");
             $obj = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
         } else {
             $core->pos($self->{xref}->{$ref});
@@ -508,6 +536,7 @@ sub _get_obj {
                 $core->get_number();
                 $core->assert_token('obj');
                 $obj = $core->get_primitive();
+                1;
             } or die "Error getting object $ref: $@";
         }
         if ( ref($obj) eq 'HASH' and defined($obj->{_stream_offset}) ) {
@@ -539,6 +568,7 @@ sub _get_compressed_obj {
 
     if ( !defined($stream_obj->{core}) ) {
         my $data = $self->_get_stream_data($stream_obj);
+        die "Error getting stream data for object $ref" unless defined($data);
         my $core = $stream_obj->{core} = $self->{core}->clone(\$data);
         my @array;
         while ( defined($_ = $core->get_number()) ) {
@@ -554,17 +584,24 @@ sub _get_compressed_obj {
 
 sub _get_stream_data {
     my ($self,$stream_obj) = @_;
-    $stream_obj = $self->_dereference($stream_obj);
-    return unless defined($stream_obj);
+    local $_ = $self->_dereference($stream_obj);
+    unless (defined($_)) {
+        die "Error getting stream data. Object not found\n" . Dumper($stream_obj);
+    }
 
     # not a stream object
-    return undef unless ref($stream_obj) eq 'HASH' && defined($stream_obj->{_stream_offset});
+    unless (ref($_) eq 'HASH' && defined($_->{_stream_offset})) {
+        die "Error getting stream data. Object is not a stream\n" . Dumper($stream_obj);
+    }
 
+    $stream_obj = $_;
     my $offset = $stream_obj->{_stream_offset};
     my $length = $self->_dereference($stream_obj->{'/Length'});
-    my @filters = !defined($stream_obj->{'/Filter'}) ? ()
-        : ref($stream_obj->{'/Filter'}) eq 'ARRAY' ? @{$stream_obj->{'/Filter'}}
-        : ( $stream_obj->{'/Filter'} );
+    my @filters;
+    if ( defined($stream_obj->{'/Filter'}) ) {
+        my $filter = $self->_dereference($stream_obj->{'/Filter'});
+        @filters = ref($filter) eq 'ARRAY' ? @{$filter} : ( $filter );
+    }
 
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
@@ -578,6 +615,7 @@ sub _get_stream_data {
     $self->{core}->assert_token('endstream');
 
     foreach my $filter (@filters) {
+        $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
             $stream_data = $f->decode($stream_data);

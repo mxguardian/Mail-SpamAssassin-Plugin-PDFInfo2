@@ -1,7 +1,8 @@
 package Mail::SpamAssassin::PDF::Filter::FlateDecode;
 use strict;
 use warnings FATAL => 'all';
-use Compress::Zlib;
+# use Compress::Zlib;
+use Compress::Raw::Zlib qw(Z_OK Z_STREAM_END);
 
 sub new {
     my ($class,$params) = @_;
@@ -19,7 +20,13 @@ sub new {
 sub decode {
     my ($self,$data) = @_;
 
-    $data = uncompress($data);
+    my $i = new Compress::Raw::Zlib::Inflate( -ConsumeInput => 0 );
+    my $uncompressed = '';
+    my $status = $i->inflate($data,$uncompressed);
+    unless ( $status == Z_OK || $status == Z_STREAM_END ) {
+        die "Error inflating data: " . $i->msg;
+    }
+    $data = $uncompressed;
     return $data unless defined($self->{predictor});
 
     my $out;

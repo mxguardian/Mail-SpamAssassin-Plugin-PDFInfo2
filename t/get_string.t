@@ -19,8 +19,11 @@ my @tests = (
     },{
         input  => '(Please fax completed form to (407) 555-0111)',
         output => 'Please fax completed form to (407) 555-0111',
+    },{
+        input  => '()',
+        output => '',
     }
-);
+ );
 
 plan tests => scalar @tests;
 

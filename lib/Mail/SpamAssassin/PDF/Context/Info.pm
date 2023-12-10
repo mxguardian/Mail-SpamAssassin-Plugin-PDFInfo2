@@ -150,17 +150,19 @@ sub parse_end {
     # Start at beginning, get comments + first object
     $md5->reset();
     $core->pos(0);
-    my $line;
+    my $line; my $pos = 0;
     while (defined($line = $core->get_line())) {
         next if $line =~ /^\s*$/; # skip blank lines
         last unless $line =~ /^%/;
         # print "> $line\n";
         $md5->add($line);
+        $pos += length($line);
     }
 
     if ( $line =~ /^\s*(\d+ \d+ obj\s*)/g ) {
         # print "> $1\n";
         $md5->add($1); # include object number
+        $parser->{core}->pos($pos + $+[0]);
         my $obj = $parser->{core}->get_primitive();
         my $str = $self->serialize_fuzzy($obj);
         # print "> $str\n";
