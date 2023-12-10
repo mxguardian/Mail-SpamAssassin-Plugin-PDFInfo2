@@ -603,6 +603,12 @@ sub _get_stream_data {
         @filters = ref($filter) eq 'ARRAY' ? @{$filter} : ( $filter );
     }
 
+    my @decodeParms;
+    if (defined($stream_obj->{'/DecodeParms'})) {
+        my $decodeParms = $self->_dereference($stream_obj->{'/DecodeParms'});
+        @decodeParms = ref($decodeParms) eq 'ARRAY' ? @{$decodeParms} : ($decodeParms);
+    }
+
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
 
@@ -614,10 +620,12 @@ sub _get_stream_data {
     }
     $self->{core}->assert_token('endstream');
 
-    foreach my $filter (@filters) {
+    for (my $i=0;$i<scalar(@filters);$i++) {
+        my $filter = $filters[$i];
+        my $decodeParms = $decodeParms[$i];
         $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
-            my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+            my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($decodeParms);
             $stream_data = $f->decode($stream_data);
         } elsif ( $filter eq '/ASCII85Decode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::ASCII85Decode->new();

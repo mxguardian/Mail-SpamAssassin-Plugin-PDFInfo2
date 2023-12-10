@@ -9,7 +9,7 @@ sub new {
 
     my $self = {};
 
-    if ( defined($params) ) {
+    if ( defined($params) && $params ne 'null' ) {
         $self->{predictor} = $params->{'/Predictor'};
         $self->{columns} = $params->{'/Columns'};
     }
