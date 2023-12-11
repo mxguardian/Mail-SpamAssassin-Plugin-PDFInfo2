@@ -1,7 +1,26 @@
+=head1 NAME
+
+Mail::SpamAssassin::PDF::Parser - Parse PDF documents
+
+=head1 SYNOPSIS
+
+    use Mail::SpamAssassin::PDF::Parser;
+    my $parser = Mail::SpamAssassin::PDF::Parser->new(timeout => 5);
+    $parser->parse(\$data);
+    print $parser->version();
+    print $parser->info()->{Author};
+    print $parser->is_encrypted();
+    print $parser->is_protected();
+
+=over
+
+=cut
+
 package Mail::SpamAssassin::PDF::Parser;
 use strict;
 use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Core;
+use Mail::SpamAssassin::PDF::Context::Info;
 use Mail::SpamAssassin::PDF::Filter::FlateDecode;
 use Mail::SpamAssassin::PDF::Filter::ASCII85Decode;
 use Mail::SpamAssassin::PDF::Filter::Decrypt;
@@ -34,21 +53,38 @@ my %abbreviations = (
     '/DCT'  => '/DCTDecode'
 );
 
+=item new(%opts)
+
+Create a new parser object. Options are:
+
+=over
+
+=item context
+
+A Mail::SpamAssassin::PDF::Context object. This object will be used to
+handle callbacks for various PDF objects. See L<Mail::SpamAssassin::PDF::Context>
+for more information.
+
+=item timeout
+
+Timeout in seconds. If the PDF document takes longer than this to parse,
+the parser will die with an error. This is useful for preventing denial
+of service attacks.
+
+=item debug
+
+Set the debugging level. Valid values are 'all', 'trace', 'xref', 'stream',
+'tokens', 'page', 'image', 'text', 'uri'
+
+=back
+
+=cut
+
 sub new {
     my ($class,%opts) = @_;
 
     my $self = bless {
-        xref         => {},
-        trailer      => {},
-        pages        => [],
-        is_encrypted => 0,
-        is_protected => 0,
-
         context      => $opts{context} || Mail::SpamAssassin::PDF::Context::Info->new(),
-
-        object_cache => {},
-        stream_cache => {},
-
         timeout      => $opts{timeout},
     }, $class;
 
@@ -57,10 +93,26 @@ sub new {
     $self;
 }
 
+=item parse($data)
+
+Parse a PDF document. $data can be a filename, a reference to a scalar containing the PDF data, or a file handle.
+
+=cut
+
 sub parse {
     my ($self,$data) = @_;
 
-    $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
+    # Initialize object
+    $self->{object_cache} = {};
+    $self->{stream_cache} = {};
+    $self->{xref} = {};
+    $self->{trailer} = {};
+    $self->{pages} = [];
+    $self->{is_encrypted} = 0;
+    $self->{is_protected} = 0;
+
+
+    $self->{core} = Mail::SpamAssassin::PDF::Core->new($data);
 
     # Parse header
     $self->{version} = $self->{core}->get_version();
@@ -652,5 +704,8 @@ sub debug {
     }
 }
 
+=back
+
+=cut
 
 1;

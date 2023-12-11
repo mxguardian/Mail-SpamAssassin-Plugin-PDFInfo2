@@ -572,7 +572,8 @@ for my $test (@tests) {
         context => $context
     );
 
-    $pdf->parse(get_file_contents($test->{filename}));
+    my $data = get_file_contents($test->{filename});
+    $pdf->parse(\$data);
     is_deeply $context->get_info(), $test->{expected}, $test->{filename};
 
 }

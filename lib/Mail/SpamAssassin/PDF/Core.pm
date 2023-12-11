@@ -48,8 +48,8 @@ my %specials = (
 my %class_map;
 $class_map{chr($_)} = CHAR_REGULAR  for 0x21..0xFF;
 $class_map{$_} = CHAR_SPACE         for split //, " \n\r\t\f\x{00}";
-$class_map{$_} = CHAR_DELIM1       for split //, '[]()%/';
-$class_map{$_} = CHAR_DELIM2       for split //, '<>';
+$class_map{$_} = CHAR_DELIM1        for split //, '[]()%/';
+$class_map{$_} = CHAR_DELIM2        for split //, '<>';
 
 =item new($fh)
 
@@ -449,11 +449,18 @@ sub _init {
     my $self = shift;
     if (ref($_[0]) eq 'SCALAR') {
         # scalar ref, open it as a file
-        open(my $fh, '<', $_[0]) or croak "Can't open file: $!";
+        open(my $fh, '<', $_[0]) or croak "Error opening scalar as file handle: $!";
+        binmode($fh);
+        $self->{fh} = $fh;
+    } elsif (ref($_[0]) eq 'GLOB') {
+        $self->{fh} = $_[0];
+    } elsif (ref($_[0]) eq '' ) {
+        # filename
+        open(my $fh, '<', $_[0]) or croak "Error opening file $_[0]: $!";
         binmode($fh);
         $self->{fh} = $fh;
     } else {
-        $self->{fh} = $_[0];
+        croak "Invalid file handle";
     }
 }
 

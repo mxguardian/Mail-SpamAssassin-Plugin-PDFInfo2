@@ -325,7 +325,7 @@ sub post_message_parse {
         # Parse PDF
         my $pdf = Mail::SpamAssassin::PDF::Parser->new(timeout => 5);
         my $info = eval {
-            $pdf->parse($data);
+            $pdf->parse(\$data);
             $pdf->{context}->get_info();
         };
         if ( !defined($info) ) {

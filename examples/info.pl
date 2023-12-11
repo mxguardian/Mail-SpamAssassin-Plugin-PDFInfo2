@@ -43,7 +43,7 @@ while (my $file = shift) {
     );
 
     eval {
-        $pdf->parse($data);
+        $pdf->parse(\$data);
         1;
     } or do {
         die "Error parsing $file: $@";

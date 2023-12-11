@@ -704,11 +704,18 @@ sub _init {
     my $self = shift;
     if (ref($_[0]) eq 'SCALAR') {
         # scalar ref, open it as a file
-        open(my $fh, '<', $_[0]) or croak "Can't open file: $!";
+        open(my $fh, '<', $_[0]) or croak "Error opening scalar as file handle: $!";
+        binmode($fh);
+        $self->{fh} = $fh;
+    } elsif (ref($_[0]) eq 'GLOB') {
+        $self->{fh} = $_[0];
+    } elsif (ref($_[0]) eq '' ) {
+        # filename
+        open(my $fh, '<', $_[0]) or croak "Error opening file $_[0]: $!";
         binmode($fh);
         $self->{fh} = $fh;
     } else {
-        $self->{fh} = $_[0];
+        croak "Invalid file handle";
     }
 }
 
@@ -932,6 +939,7 @@ sub save_state {
 
 sub restore_state {
     my $self = shift;
+    croak "Stack underflow" unless @{$self->{stack}};
     $self->{gs} = pop(@{$self->{stack}});
 }
 
@@ -1480,7 +1488,7 @@ sub new {
 
     my $self = {};
 
-    if ( defined($params) ) {
+    if ( defined($params) && $params ne 'null' ) {
         $self->{predictor} = $params->{'/Predictor'};
         $self->{columns} = $params->{'/Columns'};
     }
@@ -1554,6 +1562,24 @@ sub decode {
 }
 
 1;
+=head1 NAME
+
+Mail::SpamAssassin::PDF::Parser - Parse PDF documents
+
+=head1 SYNOPSIS
+
+    use Mail::SpamAssassin::PDF::Parser;
+    my $parser = Mail::SpamAssassin::PDF::Parser->new();
+    $parser->parse($data);
+    print $parser->version();
+    print $parser->info()->{Author};
+    print $parser->is_encrypted();
+    print $parser->is_protected();
+
+=over
+
+=cut
+
 package Mail::SpamAssassin::PDF::Parser;
 use strict;
 use warnings FATAL => 'all';
@@ -1585,21 +1611,38 @@ my %abbreviations = (
     '/DCT'  => '/DCTDecode'
 );
 
+=item new(%opts)
+
+Create a new parser object. Options are:
+
+=over
+
+=item context
+
+A Mail::SpamAssassin::PDF::Context object. This object will be used to
+handle callbacks for various PDF objects. See L<Mail::SpamAssassin::PDF::Context>
+for more information.
+
+=item timeout
+
+Timeout in seconds. If the PDF document takes longer than this to parse,
+the parser will die with an error. This is useful for preventing denial
+of service attacks.
+
+=item debug
+
+Set the debugging level. Valid values are 'all', 'trace', 'xref', 'stream',
+'tokens', 'page', 'image', 'text', 'uri'
+
+=back
+
+=cut
+
 sub new {
     my ($class,%opts) = @_;
 
     my $self = bless {
-        xref         => {},
-        trailer      => {},
-        pages        => [],
-        is_encrypted => 0,
-        is_protected => 0,
-
         context      => $opts{context} || Mail::SpamAssassin::PDF::Context::Info->new(),
-
-        object_cache => {},
-        stream_cache => {},
-
         timeout      => $opts{timeout},
     }, $class;
 
@@ -1608,10 +1651,26 @@ sub new {
     $self;
 }
 
+=item parse($data)
+
+Parse a PDF document. $data can be a filename, a reference to a scalar containing the PDF data, or a file handle.
+
+=cut
+
 sub parse {
     my ($self,$data) = @_;
 
-    $self->{core} = Mail::SpamAssassin::PDF::Core->new(\$data);
+    # Initialize object
+    $self->{object_cache} = {};
+    $self->{stream_cache} = {};
+    $self->{xref} = {};
+    $self->{trailer} = {};
+    $self->{pages} = [];
+    $self->{is_encrypted} = 0;
+    $self->{is_protected} = 0;
+
+
+    $self->{core} = Mail::SpamAssassin::PDF::Core->new($data);
 
     # Parse header
     $self->{version} = $self->{core}->get_version();
@@ -1933,6 +1992,9 @@ sub _parse_contents {
     # Build a dispatch table
     my %dispatch = (
         q  => sub { $context->save_state() },
+        # No mention of 'qq' in the PDF spec, but I've seen it in the wild. I don't know why you'd want to save_state
+        # twice in a row, but it's needed to prevent a stack underflow error.
+        qq  => sub { $context->save_state();$context->save_state(); },
         Q  => sub { $context->restore_state() },
         cm => sub { $context->concat_matrix(@_) },
         Do => sub {
@@ -2154,6 +2216,12 @@ sub _get_stream_data {
         @filters = ref($filter) eq 'ARRAY' ? @{$filter} : ( $filter );
     }
 
+    my @decodeParms;
+    if (defined($stream_obj->{'/DecodeParms'})) {
+        my $decodeParms = $self->_dereference($stream_obj->{'/DecodeParms'});
+        @decodeParms = ref($decodeParms) eq 'ARRAY' ? @{$decodeParms} : ($decodeParms);
+    }
+
     # check for cached version
     return $self->{stream_cache}->{$offset} if defined($self->{stream_cache}->{$offset});
 
@@ -2165,10 +2233,12 @@ sub _get_stream_data {
     }
     $self->{core}->assert_token('endstream');
 
-    foreach my $filter (@filters) {
+    for (my $i=0;$i<scalar(@filters);$i++) {
+        my $filter = $filters[$i];
+        my $decodeParms = $decodeParms[$i];
         $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
-            my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($stream_obj->{'/DecodeParms'});
+            my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($decodeParms);
             $stream_data = $f->decode($stream_data);
         } elsif ( $filter eq '/ASCII85Decode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::ASCII85Decode->new();
@@ -2192,6 +2262,9 @@ sub debug {
     }
 }
 
+=back
+
+=cut
 
 1;
 
@@ -2268,7 +2341,7 @@ sub post_message_parse {
         # Parse PDF
         my $pdf = Mail::SpamAssassin::PDF::Parser->new(timeout => 5);
         my $info = eval {
-            $pdf->parse($data);
+            $pdf->parse(\$data);
             $pdf->{context}->get_info();
         };
         if ( !defined($info) ) {
