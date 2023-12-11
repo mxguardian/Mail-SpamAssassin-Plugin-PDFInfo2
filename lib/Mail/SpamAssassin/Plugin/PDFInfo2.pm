@@ -264,7 +264,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.22;
+my $VERSION = 0.23;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
@@ -329,7 +329,7 @@ sub post_message_parse {
             $pdf->{context}->get_info();
         };
         if ( !defined($info) ) {
-            log_warn("Error parsing pdf: $@");
+            log_warn($@);
             $errors++;
             next;
         }
