@@ -62,6 +62,19 @@ sub new {
     my $class = shift;
     my $self = bless {},$class;
     $self->_init(@_);
+
+    # Look for PDF header
+    #
+    # According to the standard, this should be the first 5 bytes of the file, but some PDFs have extraneous data
+    # at the beginning. Acrobat Reader seems to be able to handle this, so we will too.
+    my $fh = $self->{fh};
+    { local $/ = "%PDF-"; readline($fh); }
+    croak("PDF header not found") if eof($fh);
+
+    $self->{starting_offset} = tell($fh) - 5;
+    $self->{version} = $self->get_number();
+    croak("Invalid version number") unless defined($self->{version});
+
     return $self;
 }
 
@@ -87,7 +100,9 @@ Sets the file pointer to the specified offset.  If no offset is specified, retur
 
 sub pos {
     my ($self,$offset) = @_;
-    defined($offset) ? seek($self->{fh},$offset,0) : tell($self->{fh});
+    defined($offset)
+        ? seek($self->{fh},$offset+$self->{starting_offset},0)
+        : tell($self->{fh}) - $self->{starting_offset};
 }
 
 =item get_number
@@ -100,13 +115,13 @@ sub get_number {
     my ($self) = @_;
     my $fh = $self->{fh};
 
-    my $offset = tell($fh);
+    my $offset = $self->pos();
     my $num = $self->get_token();
     return unless defined($num);
 
     if ( $num !~ /^[0-9+.-]+$/ ) {
         # not a number
-        seek($fh, $offset, 0);
+        $self->pos($offset);
         return;
     }
 
@@ -125,7 +140,7 @@ sub assert_number {
     my ($self,$num) = @_;
     my $fh = $self->{fh};
 
-    my $offset = tell($fh);
+    my $offset = $self->pos();
     my $token = $self->get_token();
     if (!defined($token) ) {
         # EOF
@@ -134,14 +149,14 @@ sub assert_number {
 
     if ($token !~ /^[0-9+.-]+$/ ) {
         # not a number
-        seek($fh, $offset, 0);
+        $self->pos($offset);
         croak "Expected number, got '$token' at offset $offset";
     }
 
     $token += 0;
     if ( defined($num) && $token != $num ) {
         # not the expected number
-        seek($fh, $offset, 0);
+        $self->pos($offset);
         croak "Expected number '$num', got '$token' at offset $offset";
     }
 
@@ -157,13 +172,13 @@ sub assert_token {
     my ($self,$literal) = @_;
     my $fh = $self->{fh};
 
-    my $offset = tell($fh);
+    my $offset = $self->pos();
     my $token = $self->get_token();
     if (!defined($token) ) {
         croak "Expected '$literal', got EOF";
     }
     if ($token ne $literal) {
-        seek($fh, $offset, 0);
+        $self->pos($offset);
         croak "Expected '$literal', got '$token' at offset $offset";
     }
     1;
@@ -258,7 +273,7 @@ NEXT_TOKEN:
         goto NEXT_TOKEN;
     }
     if ( $token =~ /^[0-9]+$/ ) {
-        my $offset = tell($fh);
+        my $offset = $self->pos();
         my $t2 = $self->get_token();
         if ( defined($t2) && $t2 =~ /^[0-9]+$/ ) {
             my $t3 = $self->get_token();
@@ -267,7 +282,7 @@ NEXT_TOKEN:
                 return wantarray ? ($token,TYPE_REF) : $token;
             }
         }
-        seek($fh, $offset, 0);
+        $self->pos($offset);
         return wantarray ? ($token,TYPE_NUM) : $token;
     }
     if ( $token =~ /^[0-9.+-]+$/ ) {
@@ -319,13 +334,7 @@ sub get_line {
 
 sub get_version {
     my ($self) = @_;
-    my $fh = $self->{fh};
-
-    seek($fh, 0, 0);
-    my $version = $self->get_line();
-    $version =~  /^%PDF\-(\d\.\d)/ or croak("PDF magic header not found");
-    return $1;
-
+    return $self->{version};
 }
 
 =item get_startxref
@@ -604,17 +613,17 @@ sub _get_dict {
 
     if ( exists($dict{'/Length'})) {
         # check for stream data following the dictionary
-        my $offset = tell($fh);
+        my $offset = $self->pos();
         while (defined(my $line = $self->get_line())) {
             next if $line =~ /^\s*$/; # skip blank lines
             if ($line =~ /^\s*stream\b/) {
-                $dict{_stream_offset} = tell($fh);
+                $dict{_stream_offset} = $self->pos();
                 return wantarray ? (\%dict, TYPE_STREAM) : \%dict;
             }
             last;
         }
         # not a stream dictionary
-        seek($fh, $offset, 0);
+        $self->pos($offset);
     }
 
     return wantarray ? (\%dict,TYPE_DICT) : \%dict;

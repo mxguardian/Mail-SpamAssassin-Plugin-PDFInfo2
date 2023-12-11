@@ -58,12 +58,11 @@ my @tests = (
 plan tests => scalar @tests * 2;
 
 foreach my $test (@tests) {
-    my $input = $test->{input};
+    my $input = '%PDF-1.4 '.$test->{input};
     my $output = $test->{output};
-    open(my $fh, '<', \$input);
-    my $core = Mail::SpamAssassin::PDF::Core->new($fh);
+    my $core = Mail::SpamAssassin::PDF::Core->new(\$input);
+    $core->pos(9);
     my ($token,$type) = $core->get_primitive();
     is($token, $output, "$input");
     is($type, $test->{type}, "type: $input");
-    close($fh);
 }

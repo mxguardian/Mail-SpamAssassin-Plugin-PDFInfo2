@@ -50,6 +50,7 @@ while (my $file = shift) {
     };
     my $info = $pdf->{context}->get_info;
 
+    print "PDF Version ".$pdf->version()."\n";
     if ( defined($field) ) {
         printf("%s: %s\n",$info->{$field} || '',$file);
     } else {

@@ -28,10 +28,10 @@ my @tests = (
 plan tests => scalar @tests;
 
 foreach my $test (@tests) {
-    my $input = $test->{input};
+    my $input = '%PDF-1.4 '.$test->{input};
     my $output = $test->{output};
-    open(my $fh, '<', \$input);
-    my $core = Mail::SpamAssassin::PDF::Core->new($fh);
+    my $core = Mail::SpamAssassin::PDF::Core->new(\$input);
+    $core->pos(9);
     my $result = $core->get_primitive();
     is_deeply($result, $output, $input);
 }

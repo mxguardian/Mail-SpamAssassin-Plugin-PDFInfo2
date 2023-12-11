@@ -24,14 +24,14 @@ my @tests = (
             '/O' => '426',
             '/S' => '223',
             '/V' => '442',
-            '_stream_offset' => 73,
+            '_stream_offset' => 82,
         },
     },{
         # First LF is the line ending, second LF is the stream data (length 1)
         input  => "<</Length 1>> stream\n\nendstream",
         output => {
             '/Length'        => '1',
-            '_stream_offset' => 21,
+            '_stream_offset' => 30,
         },
     },{
         input  => "<</AcroForm<</Fields[]>>/Pages 2 0 R /StructTreeRoot 72 0 R /Type/Catalog/MarkInfo<</Marked true>>/Lang(en-US)/Metadata 475 0 R >>\nendobj",
@@ -54,10 +54,10 @@ my @tests = (
 plan tests => scalar @tests;
 
 foreach my $test (@tests) {
-    my $input = $test->{input};
+    my $input = '%PDF-1.4 '.$test->{input};
     my $output = $test->{output};
-    open(my $fh, '<', \$input);
-    my $core = Mail::SpamAssassin::PDF::Core->new($fh);
+    my $core = Mail::SpamAssassin::PDF::Core->new(\$input);
+    $core->pos(9);
     my $result = $core->get_dict();
     is_deeply($result, $output, Dumper($result));
 }

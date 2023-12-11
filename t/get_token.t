@@ -7,6 +7,7 @@ use Mail::SpamAssassin::PDF::Core;
 use Data::Dumper;
 
 my $data = <<'EOF';
+%PDF-1.4
 34 0 obj<</Name /Page /Parent 1 0 R /MediaBox [0 0 612 792] /XObject <</Resources 2 0 R /Contents 4 0 R /Type /Page /Rotate 0>>>>
 [[1 0 0 1 0 0] 0]
 44 (q) -273.2 .5 1.5 rg
@@ -20,8 +21,8 @@ my @tokens = qw(
 
 plan tests => scalar @tokens;
 
-open(my $fh, '<', \$data);
-my $core = Mail::SpamAssassin::PDF::Core->new($fh);
+my $core = Mail::SpamAssassin::PDF::Core->new(\$data);
+$core->pos(9);
 my $i=0;
 foreach my $token (@tokens) {
     my $result = $core->get_token();
