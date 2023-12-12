@@ -187,8 +187,7 @@ sub assert_token {
 =item get_token
 
 Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
-there are no more tokens. Will croak if an invalid character is encountered or if the token is longer than 20
-characters.
+there are no more tokens. Will croak if an invalid character is encountered or if the token is too long.
 
 =cut
 
@@ -196,8 +195,11 @@ sub get_token {
     my ($self) = @_;
     my $fh = $self->{fh};
 
+    # Max token length. This is to prevent reading the entire file into memory if the file is corrupt or if the
+    # file pointer is not set correctly.
+    my $limit = 256;
+
     my $token;
-    my $limit = 20;
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
         unless (defined($class)) {
