@@ -442,7 +442,8 @@ sub assert_token {
 =item get_token
 
 Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
-there are no more tokens. Will croak if an invalid character is encountered.
+there are no more tokens. Will croak if an invalid character is encountered or if the token is longer than 20
+characters.
 
 =cut
 
@@ -451,6 +452,7 @@ sub get_token {
     my $fh = $self->{fh};
 
     my $token;
+    my $limit = 20;
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
         unless (defined($class)) {
@@ -488,6 +490,7 @@ sub get_token {
             }
         }
         $token .= $ch;
+        die "Invalid token length at offset ".tell($fh) if $limit-- == 0;
     }
 
     return $token;
@@ -621,7 +624,7 @@ sub get_startxref {
         $tok = $ch . $tok;
     }
 
-    croak "startxref not found" unless $tok eq 'startxref';
+    croak "EOF marker not found" unless $tok eq 'startxref';
 
     my $xref = $self->get_number();
     croak "Invalid startxref" unless defined($xref);
@@ -632,7 +635,7 @@ sub get_startxref {
         $self->assert_token('EOF');
         1;
     } or do {
-        croak "Invalid startxref. EOF marker not found";
+        croak "EOF marker not found";
     };
 
     return $xref;
@@ -726,6 +729,8 @@ sub _init {
     } else {
         croak "Invalid file handle";
     }
+    $self->{pos} = 0;
+    $self->{starting_offset} = 0;
 }
 
 sub _get_string {
@@ -1762,16 +1767,21 @@ sub _parse_xref {
     my $core = $self->{core};
 
     $core->pos($pos);
-    my $token = $core->get_token();
+    my $token = eval { $core->get_token(); } // '';
     if ( $token ne 'xref' ) {
-        # not a cross-reference table. May be a cross-reference stream
-        if ( $token !~ /^\d+$/ ) {
-            die "xref not found at offset $pos";
-        }
+        # not a cross-reference table. See if it's a cross-reference stream
+        eval {
+            die if ($token !~ /^\d+$/);
+            $core->assert_number();
+            $core->assert_token('obj');
+            1;
+        } or do {
+            # not a cross-reference stream either. Try to repair the file
+            return $self->_repair_xref($pos);
+        };
         debug('xref','Parsing xref stream at offset '.$pos);
-        $core->assert_number();
-        $core->assert_token('obj');
-        return $self->_parse_xref_stream();
+        my $xref = $core->get_dict();
+        return $self->_parse_xref_stream($xref);
     }
     debug('xref','Parsing xref table at offset '.$pos);
 
@@ -1807,9 +1817,8 @@ sub _parse_xref {
 }
 
 sub _parse_xref_stream {
-    my ($self) = @_;
+    my ($self,$xref) = @_;
 
-    my $xref = $self->{core}->get_dict();
     my $data = $self->_get_stream_data($xref);
     my $width = $xref->{'/W'}->[0] + $xref->{'/W'}->[1] + $xref->{'/W'}->[2];
     my $template = 'H'.($xref->{'/W'}->[0]*2).'H'.($xref->{'/W'}->[1]*2).'H'.($xref->{'/W'}->[2]*2);
@@ -1843,6 +1852,85 @@ sub _parse_xref_stream {
     }
 
     return 1;
+
+}
+
+# sub _repair_xref()
+#
+# Try to repair a PDF file that has a corrupt xref table. This generally happens when a PDF has been transmitted
+# over a network and the line endings have been converted from DOS to Unix or vice versa. This causes the offsets
+# in the xref table to be incorrect. This method will scan the file from beginning to end looking for objects and
+# creates the xref table manually. This seems to be how Adobe Reader handles it so we'll do the same.
+#
+sub _repair_xref {
+    my ($self) = @_;
+    my $core = $self->{core};
+    my @token_buf;
+    my @pos_buf;
+    my @xref_stream;
+
+    # Scan the file from the beginning looking for objects and add them to the xref table
+    $core->pos(0);
+    while () {
+        my $pos = $core->pos();
+        my $token = $core->get_token();
+        last unless defined($token);
+        if ( $token eq 'obj' ) {
+            # found object
+            my $ref = join(' ',@token_buf).' R';
+            $self->{xref}->{$ref} = $pos_buf[0];
+            my $obj = $core->get_primitive();
+            if ( ref($obj) eq 'HASH' && defined($obj->{_stream_offset}) ) {
+                # Object stream. Skip over stream data
+                { local $/ = "\nendstream"; readline $core->{fh}; }
+
+                # Calculate stream length (may be different from Length entry)
+                $obj->{_stream_length} = $core->pos() - $obj->{_stream_offset} - 10;
+
+                # Store in cache
+                $obj->{_objnum} = $token_buf[0];
+                $obj->{_gennum} = $token_buf[1];
+                $self->{object_cache}->{$ref} = $obj;
+
+                if ( defined($obj->{'/Type'}) && $obj->{'/Type'} eq '/XRef' ) {
+                    # Found xref stream. Process these later
+                    push(@xref_stream, $obj);
+                }
+            }
+            @token_buf = ();
+            @pos_buf = ();
+            next;
+        }
+        if ( $token eq 'trailer' ) {
+            # found trailer
+            my $trailer = $core->get_dict();
+            $self->{trailer} = {
+                %{$trailer},
+                %{$self->{trailer}}
+            };
+            last;
+        }
+
+        # keep the last two tokens and their positions in a buffer
+        push(@token_buf,$token);
+        push(@pos_buf,$pos);
+        if (scalar(@token_buf) > 2) {
+            shift @token_buf;
+            shift @pos_buf;
+        }
+    }
+
+    die "Trailer not found" unless defined($self->{trailer});
+
+    # Process xref streams in reverse order
+    while () {
+        my $xref_stream = pop(@xref_stream);
+        last unless defined($xref_stream);
+        undef $xref_stream->{'/Prev'}; # prevent recursion
+        $self->_parse_xref_stream($xref_stream);
+    }
+
+
 
 }
 
@@ -2215,7 +2303,9 @@ sub _get_stream_data {
 
     $stream_obj = $_;
     my $offset = $stream_obj->{_stream_offset};
-    my $length = $self->_dereference($stream_obj->{'/Length'});
+    my $length = defined($stream_obj->{_stream_length})
+        ? $stream_obj->{_stream_length}
+        : $self->_dereference($stream_obj->{'/Length'});
     my @filters;
     if ( defined($stream_obj->{'/Filter'}) ) {
         my $filter = $self->_dereference($stream_obj->{'/Filter'});
@@ -2286,7 +2376,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.23;
+my $VERSION = 0.24;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

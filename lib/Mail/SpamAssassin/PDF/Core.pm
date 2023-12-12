@@ -187,7 +187,8 @@ sub assert_token {
 =item get_token
 
 Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
-there are no more tokens. Will croak if an invalid character is encountered.
+there are no more tokens. Will croak if an invalid character is encountered or if the token is longer than 20
+characters.
 
 =cut
 
@@ -196,6 +197,7 @@ sub get_token {
     my $fh = $self->{fh};
 
     my $token;
+    my $limit = 20;
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
         unless (defined($class)) {
@@ -233,6 +235,7 @@ sub get_token {
             }
         }
         $token .= $ch;
+        die "Invalid token length at offset ".tell($fh) if $limit-- == 0;
     }
 
     return $token;
@@ -366,7 +369,7 @@ sub get_startxref {
         $tok = $ch . $tok;
     }
 
-    croak "startxref not found" unless $tok eq 'startxref';
+    croak "EOF marker not found" unless $tok eq 'startxref';
 
     my $xref = $self->get_number();
     croak "Invalid startxref" unless defined($xref);
@@ -377,7 +380,7 @@ sub get_startxref {
         $self->assert_token('EOF');
         1;
     } or do {
-        croak "Invalid startxref. EOF marker not found";
+        croak "EOF marker not found";
     };
 
     return $xref;
@@ -471,6 +474,8 @@ sub _init {
     } else {
         croak "Invalid file handle";
     }
+    $self->{pos} = 0;
+    $self->{starting_offset} = 0;
 }
 
 sub _get_string {
