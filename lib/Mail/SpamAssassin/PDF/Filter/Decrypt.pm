@@ -68,6 +68,8 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
+    return $content unless defined($content) && length($content);
+
     eval {
 
         if ( $self->{V} == 4 || $self->{V} == 5 ) {
