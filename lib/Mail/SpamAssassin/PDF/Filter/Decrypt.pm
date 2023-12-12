@@ -68,14 +68,22 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
-    if ( $self->{V} == 4 || $self->{V} == 5 ) {
-        # todo: Implement Crypt Filters
-        my $iv = substr($content,0,16);
-        my $m = Crypt::Mode::CBC->new('AES');
-        my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
-        return $m->decrypt(substr($content,16),$key,$iv);
-    }
-    return Crypt::RC4::RC4($self->_compute_key(), $content);
+    eval {
+
+        if ( $self->{V} == 4 || $self->{V} == 5 ) {
+            # todo: Implement Crypt Filters
+            my $iv = substr($content,0,16);
+            my $m = Crypt::Mode::CBC->new('AES');
+            my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
+            return $m->decrypt(substr($content,16),$key,$iv);
+        }
+        return Crypt::RC4::RC4($self->_compute_key(), $content);
+
+    } or do {
+        my $err = $@;
+        $err =~ s/\n//g;
+        croak "Error decrypting object $self->{objnum} $self->{gennum}: $err";
+    };
 
 }
 

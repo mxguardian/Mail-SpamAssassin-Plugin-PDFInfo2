@@ -126,6 +126,7 @@ sub parse {
         debug('trace',"Calling _parse_xref");
         $self->_parse_xref($self->{core}->get_startxref());
         debug('xref',$self->{xref});
+        debug('trailer',$self->{trailer});
 
         # Parse encryption dictionary
         debug('trace',"Calling _parse_encrypt");
@@ -134,7 +135,9 @@ sub parse {
         # Parse info object
         debug('trace',"Calling _parse_info");
         $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
+        debug('info',$self->{trailer}->{'/Info'});
         $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
+        debug('root',$self->{trailer}->{'/Root'});
 
         # Parse catalog
         my $root = $self->{trailer}->{'/Root'};
@@ -379,6 +382,7 @@ sub _parse_encrypt {
         $self->{is_protected} = 1;
     }
     $self->{is_encrypted} = 1;
+    debug('crypt',$self->{core}->{crypt});
 
 }
 
@@ -402,6 +406,7 @@ sub _parse_pages {
     # inherit properties
     $parent_node = {} unless defined($parent_node);
     for (qw(/MediaBox /Resources) ) {
+        next unless defined($parent_node->{$_});
         $node->{$_} = $parent_node->{$_} unless defined($node->{$_});
     }
 
@@ -604,6 +609,7 @@ sub _parse_contents {
     debug('stream',$stream);
 
     my $core = $self->{core}->clone(\$stream);
+    $core->{crypt} = undef;
 
     # Process commands
     while () {

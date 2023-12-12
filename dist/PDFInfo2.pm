@@ -1169,11 +1169,11 @@ sub parse_end {
         $pos += length($line);
     }
 
-    if ( $line =~ /^\s*(\d+ \d+ obj\s*)/g ) {
-        # print "> $1\n";
-        $md5->add($1); # include object number
-        $parser->{core}->pos($pos + $+[0]);
-        my $obj = $parser->{core}->get_primitive();
+    if ( $line =~ /^\s*(\d+) (\d+) (obj\s*)/g ) {
+        $core->pos($pos + $+[3]);
+        $md5->add("$1 $2 $3"); # include object number
+        $core->{crypt}->set_current_object($1,$2) if defined($core->{crypt});
+        my $obj = $core->get_primitive();
         my $str = $self->serialize_fuzzy($obj);
         # print "> $str\n";
         $md5->add($str);
@@ -1311,14 +1311,22 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
-    if ( $self->{V} == 4 || $self->{V} == 5 ) {
-        # todo: Implement Crypt Filters
-        my $iv = substr($content,0,16);
-        my $m = Crypt::Mode::CBC->new('AES');
-        my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
-        return $m->decrypt(substr($content,16),$key,$iv);
-    }
-    return Crypt::RC4::RC4($self->_compute_key(), $content);
+    eval {
+
+        if ( $self->{V} == 4 || $self->{V} == 5 ) {
+            # todo: Implement Crypt Filters
+            my $iv = substr($content,0,16);
+            my $m = Crypt::Mode::CBC->new('AES');
+            my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
+            return $m->decrypt(substr($content,16),$key,$iv);
+        }
+        return Crypt::RC4::RC4($self->_compute_key(), $content);
+
+    } or do {
+        my $err = $@;
+        $err =~ s/\n//g;
+        croak "Error decrypting object $self->{objnum} $self->{gennum}: $err";
+    };
 
 }
 
@@ -1698,6 +1706,7 @@ sub parse {
         debug('trace',"Calling _parse_xref");
         $self->_parse_xref($self->{core}->get_startxref());
         debug('xref',$self->{xref});
+        debug('trailer',$self->{trailer});
 
         # Parse encryption dictionary
         debug('trace',"Calling _parse_encrypt");
@@ -1706,7 +1715,9 @@ sub parse {
         # Parse info object
         debug('trace',"Calling _parse_info");
         $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
+        debug('info',$self->{trailer}->{'/Info'});
         $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
+        debug('root',$self->{trailer}->{'/Root'});
 
         # Parse catalog
         my $root = $self->{trailer}->{'/Root'};
@@ -1951,6 +1962,7 @@ sub _parse_encrypt {
         $self->{is_protected} = 1;
     }
     $self->{is_encrypted} = 1;
+    debug('crypt',$self->{core}->{crypt});
 
 }
 
@@ -1974,6 +1986,7 @@ sub _parse_pages {
     # inherit properties
     $parent_node = {} unless defined($parent_node);
     for (qw(/MediaBox /Resources) ) {
+        next unless defined($parent_node->{$_});
         $node->{$_} = $parent_node->{$_} unless defined($node->{$_});
     }
 
@@ -2176,6 +2189,7 @@ sub _parse_contents {
     debug('stream',$stream);
 
     my $core = $self->{core}->clone(\$stream);
+    $core->{crypt} = undef;
 
     # Process commands
     while () {
@@ -2376,7 +2390,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.24;
+my $VERSION = 0.25;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

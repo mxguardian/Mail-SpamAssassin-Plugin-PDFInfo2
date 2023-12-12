@@ -159,11 +159,11 @@ sub parse_end {
         $pos += length($line);
     }
 
-    if ( $line =~ /^\s*(\d+ \d+ obj\s*)/g ) {
-        # print "> $1\n";
-        $md5->add($1); # include object number
-        $parser->{core}->pos($pos + $+[0]);
-        my $obj = $parser->{core}->get_primitive();
+    if ( $line =~ /^\s*(\d+) (\d+) (obj\s*)/g ) {
+        $core->pos($pos + $+[3]);
+        $md5->add("$1 $2 $3"); # include object number
+        $core->{crypt}->set_current_object($1,$2) if defined($core->{crypt});
+        my $obj = $core->get_primitive();
         my $str = $self->serialize_fuzzy($obj);
         # print "> $str\n";
         $md5->add($str);
