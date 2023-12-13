@@ -129,7 +129,7 @@ sub _check_user_password {
 
         # step 3 Pass the first element of the file’s file identifier array to the hash function
         # and finish the hash.
-        $md5->add($self->{ID});
+        $md5->add($self->{ID}) if defined($self->{ID});
         $hash = $md5->digest();
 
         # step 4  Encrypt the 16-byte result of the hash, using an RC4 encryption function with the
