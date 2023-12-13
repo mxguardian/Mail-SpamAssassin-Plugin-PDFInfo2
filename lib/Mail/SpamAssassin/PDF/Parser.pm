@@ -764,8 +764,8 @@ sub _get_stream_data {
     $self->{core}->assert_token('endstream');
 
     for (my $i=0;$i<scalar(@filters);$i++) {
-        my $filter = $filters[$i];
-        my $decodeParms = $decodeParms[$i];
+        my $filter = $self->_dereference($filters[$i]);
+        my $decodeParms = $self->_dereference($decodeParms[$i]);
         $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($decodeParms);
