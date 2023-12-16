@@ -442,8 +442,7 @@ sub assert_token {
 =item get_token
 
 Get the next token from the file as a string of characters. Will skip leading spaces and comments. Returns undef if
-there are no more tokens. Will croak if an invalid character is encountered or if the token is longer than 20
-characters.
+there are no more tokens. Will croak if an invalid character is encountered or if the token is too long.
 
 =cut
 
@@ -451,8 +450,11 @@ sub get_token {
     my ($self) = @_;
     my $fh = $self->{fh};
 
+    # Max token length. This is to prevent reading the entire file into memory if the file is corrupt or if the
+    # file pointer is not set correctly.
+    my $limit = 256;
+
     my $token;
-    my $limit = 20;
     while (defined(my $ch = getc($fh))) {
         my $class = $class_map{$ch};
         unless (defined($class)) {
@@ -1311,6 +1313,8 @@ sub set_current_object {
 sub decrypt {
     my ($self,$content) = @_;
 
+    return $content unless defined($content) && length($content);
+
     eval {
 
         if ( $self->{V} == 4 || $self->{V} == 5 ) {
@@ -1370,7 +1374,7 @@ sub _check_user_password {
 
         # step 3 Pass the first element of the file’s file identifier array to the hash function
         # and finish the hash.
-        $md5->add($self->{ID});
+        $md5->add($self->{ID}) if defined($self->{ID});
         $hash = $md5->digest();
 
         # step 4  Encrypt the 16-byte result of the hash, using an RC4 encryption function with the
@@ -1991,6 +1995,7 @@ sub _parse_pages {
     }
 
     if ( !defined($node->{'/Type'}) ) {
+        print Dumper($node);
         # Type is required but sometimes it's missing
         $node->{'/Type'} = defined($node->{'/Kids'}) ? '/Pages' :
                            defined($node->{'/Contents'}) ? '/Page' :
@@ -2048,6 +2053,8 @@ sub _parse_action {
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
         if ( $location =~ /^\w+:/ ) {
+            $rect = $self->_dereference($rect);
+            $_ = $self->_dereference($_) for (@{$rect});
             $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
         }
     }
@@ -2344,8 +2351,8 @@ sub _get_stream_data {
     $self->{core}->assert_token('endstream');
 
     for (my $i=0;$i<scalar(@filters);$i++) {
-        my $filter = $filters[$i];
-        my $decodeParms = $decodeParms[$i];
+        my $filter = $self->_dereference($filters[$i]);
+        my $decodeParms = $self->_dereference($decodeParms[$i]);
         $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($decodeParms);
@@ -2390,7 +2397,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.25;
+my $VERSION = 0.26;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

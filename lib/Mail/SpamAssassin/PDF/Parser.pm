@@ -468,6 +468,8 @@ sub _parse_action {
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
         if ( $location =~ /^\w+:/ ) {
+            $rect = $self->_dereference($rect);
+            $_ = $self->_dereference($_) for (@{$rect});
             $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
         }
     }
