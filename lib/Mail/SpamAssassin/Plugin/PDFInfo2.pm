@@ -29,11 +29,13 @@ Notable improvements:
 
 =over 4
 
+=item Unlike the original plugin, this plugin can parse compressed data streams to analyze images and text
+
 =item It can parse PDF's that are encrypted with a blank password
 
 =item Several of the tests focus exclusively on page 1 of each document. This not only helps with performance but is a countermeasure against content stuffing
 
-=item pdf2_click_ratio - Fires based on how much of page 1 is clickable. Based on preliminary testing, anything over 20% is likely spam, especially if there's only one link and the word count is low.
+=item pdf2_click_ratio - Fires based on how much of page 1 is clickable (as a percentage of total page area)
 
 =back
 
@@ -65,6 +67,9 @@ This plugin requires the following non-core perl modules:
 
 =back
 
+Additionally, if you want to analyze text from PDF's you will need to install L<pdftotext|https://poppler.freedesktop.org/>
+and enable it using the L<Mail::SpamAssassin::Plugin::ExtractText|https://spamassassin.apache.org/full/4.0.x/doc/Mail_SpamAssassin_Plugin_ExtractText.html> plugin.
+
 =head1 INSTALLATION
 
 =head3 Manual method
@@ -79,7 +84,9 @@ TBD
 
   loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2
 
-=head1 RULE DEFINITIONS
+=head1 EVAL RULES
+
+This plugin defines the following eval rules:
 
   pdf2_count()
 
@@ -183,6 +190,14 @@ The following rules only inspect the first page of each document
 
         Note: Percent values range from 0-100
 
+=head1 TEXT RULES
+
+To match against text extracted from PDF's, use the following syntax:
+
+    pdftext  RULENAME   /regex/
+    score    RULENAME   1.0
+    describe RULENAME   PDF contains text matching /regex/
+
 =head1 TAGS
 
 The following tags can be defined in an C<add_header> line:
@@ -230,7 +245,7 @@ different.
 
 =head1 URI DETAILS
 
-This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using the URIDetail.pm plugin. For example:
+This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using the L<URIDetail|https://spamassassin.apache.org/full/4.0.x/doc/Mail_SpamAssassin_Plugin_URIDetail.html> plugin. For example:
 
     uri-detail RULENAME  type =~ /^pdf$/  raw =~ /^https?:\/\/bit\.ly\//
 
@@ -258,13 +273,14 @@ package Mail::SpamAssassin::Plugin::PDFInfo2;
 use Mail::SpamAssassin::Plugin;
 use Mail::SpamAssassin::Logger ();
 use Mail::SpamAssassin::Util qw(compile_regexp);
+use Mail::SpamAssassin::PDF::Parser;
 use strict;
 use warnings;
 use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.26;
+my $VERSION = 0.27;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
@@ -299,7 +315,47 @@ sub new {
     $self->register_method_priority ("parsed_metadata", -1);
     $self->register_method_priority('post_message_parse', -1);
 
+    $self->set_config($mailsaobject->{conf});
+
     return $self;
+}
+
+sub set_config {
+    my ($self, $conf) = @_;
+    my @cmds;
+
+    push (@cmds, (
+        {
+            setting => 'pdftext',
+            is_priv => 1,
+            type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
+            code => sub {
+                my ($self, $key, $value, $line) = @_;
+
+                if ($value !~ /^(\S+)\s+(.+)$/) {
+                    return $Mail::SpamAssassin::Conf::INVALID_VALUE;
+                }
+                my $name = $1;
+                my $pattern = $2;
+
+                my ($re, $err) = compile_regexp($pattern, 1);
+                if (!$re) {
+                    dbg("Error parsing rule: invalid regexp '$pattern': $err");
+                    return $Mail::SpamAssassin::Conf::INVALID_VALUE;
+                }
+
+                $conf->{parser}->{conf}->{pdftext_rules}->{$name} = $re;
+
+                # just define the test so that scores and lint works
+                $self->{parser}->add_test($name, undef,
+                    $Mail::SpamAssassin::Conf::TYPE_EMPTY_TESTS);
+
+
+            }
+        }
+    ));
+
+    $conf->{parser}->register_commands(\@cmds);
 }
 
 sub post_message_parse {
@@ -348,6 +404,7 @@ sub parsed_metadata {
 
     # initialize
     $pms->{pdfinfo2}->{files} = {};
+    $pms->{pdfinfo2}->{text} = [];
     $pms->{pdfinfo2}->{totals} = {
         FileCount       => 0,
         ImageCount      => 0,
@@ -372,8 +429,13 @@ sub parsed_metadata {
             $pms->add_uri_detail_list($location,{ pdf => 1 },'PDFInfo2');
         }
 
-        # Get word count (requires ExtractText to have already extracted text from the PDF)
+        # Get text (requires ExtractText to have already extracted text from the PDF)
         my $text = $p->rendered() || '';
+        for (split(/^/, $text)) {
+            chomp;
+            next if /^\s*$/;
+            push(@{$pms->{pdfinfo2}->{text}}, $_);
+        }
         $info->{WordCount} = scalar(split(/\s+/, $text));
 
         $pms->{pdfinfo2}->{files}->{$name} = $info;
@@ -410,6 +472,33 @@ sub parsed_metadata {
     _set_tag($pms, 'PDF2WORDCOUNT', $pms->{pdfinfo2}->{totals}->{WordCount});
     _set_tag($pms, 'PDF2PAGECOUNT', $pms->{pdfinfo2}->{totals}->{PageCount});
     _set_tag($pms, 'PDF2LINKCOUNT', $pms->{pdfinfo2}->{totals}->{LinkCount});
+
+    $self->_run_pdftext_rules($pms);
+}
+
+sub _run_pdftext_rules {
+    my ($self, $pms) = @_;
+
+    my $pdftext_rules = $pms->{conf}->{pdftext_rules};
+    return unless defined $pdftext_rules;
+
+    my $text = $pms->{pdfinfo2}->{text};
+    return unless defined $text && $text ne '';
+
+    foreach my $name (keys %{$pdftext_rules}) {
+        my $re = $pdftext_rules->{$name};
+        foreach my $line (@$text) {
+            if ($line =~ /$re/p) {
+                my $match = defined ${^MATCH} ? ${^MATCH} : '<negative match>';
+                log_dbg(qq(ran rule $name ======> got hit "$match"));
+                my $score = $pms->{conf}->{scores}->{$name} // 1;
+                $pms->got_hit($name,'PDFTEXT: ','ruletype' => 'body', 'score' => $score);
+                $pms->{pattern_hits}->{$name} = $match;
+                last;
+            }
+        }
+    }
+
 }
 
 sub _set_tag {

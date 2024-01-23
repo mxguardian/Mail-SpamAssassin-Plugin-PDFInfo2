@@ -27,7 +27,7 @@ sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/ASCII85
 echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Parser.pm >>$OUTFILE
 echo >>$OUTFILE
-sed -e '1,/^=cut/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
+sed -e '1,/^=cut/d' -e '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/Plugin/PDFInfo2.pm >>$OUTFILE
 
 #
 # Generate the README.md file from the POD

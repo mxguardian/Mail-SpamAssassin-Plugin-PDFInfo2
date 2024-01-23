@@ -10,9 +10,10 @@ simultaneously, if desired.
 
 Notable improvements:
 
+- Unlike the original plugin, this plugin can parse compressed data streams to analyze images and text
 - It can parse PDF's that are encrypted with a blank password
 - Several of the tests focus exclusively on page 1 of each document. This not only helps with performance but is a countermeasure against content stuffing
-- pdf2\_click\_ratio - Fires based on how much of page 1 is clickable. Based on preliminary testing, anything over 20% is likely spam, especially if there's only one link and the word count is low.
+- pdf2\_click\_ratio - Fires based on how much of page 1 is clickable (as a percentage of total page area)
 
 Encryption routines were made possible by borrowing some code from CAM::PDF by Chris Dolan
 
@@ -30,6 +31,9 @@ This plugin requires the following non-core perl modules:
 - Crypt::Mode::CBC
 - Convert::Ascii85
 
+Additionally, if you want to analyze text from PDF's you will need to install [pdftotext](https://poppler.freedesktop.org/)
+and enable it using the [Mail::SpamAssassin::Plugin::ExtractText](https://spamassassin.apache.org/full/4.0.x/doc/Mail_SpamAssassin_Plugin_ExtractText.html) plugin.
+
 # INSTALLATION
 
 ### Manual method
@@ -44,7 +48,9 @@ TBD
 
     loadplugin     Mail::SpamAssassin::Plugin::PDFInfo2
 
-# RULE DEFINITIONS
+# EVAL RULES
+
+This plugin defines the following eval rules:
 
     pdf2_count()
 
@@ -148,6 +154,14 @@ The following rules only inspect the first page of each document
 
           Note: Percent values range from 0-100
 
+# TEXT RULES
+
+To match against text extracted from PDF's, use the following syntax:
+
+    pdftext  RULENAME   /regex/
+    score    RULENAME   1.0
+    describe RULENAME   PDF contains text matching /regex/
+
 # TAGS
 
 The following tags can be defined in an `add_header` line:
@@ -194,7 +208,7 @@ different.
 
 # URI DETAILS
 
-This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using the URIDetail.pm plugin. For example:
+This plugin creates a new "pdf" URI type. You can detect URI's in PDF's using the [URIDetail](https://spamassassin.apache.org/full/4.0.x/doc/Mail_SpamAssassin_Plugin_URIDetail.html) plugin. For example:
 
     uri-detail RULENAME  type =~ /^pdf$/  raw =~ /^https?:\/\/bit\.ly\//
 
