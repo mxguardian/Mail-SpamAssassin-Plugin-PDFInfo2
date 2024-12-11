@@ -1049,7 +1049,6 @@ sub new {
         uris       => {}
     };
     $self->{fuzzy_md5} = Digest::MD5->new();
-    $self->{fuzzy_md5_data} = '';
     $self;
 }
 
@@ -1061,18 +1060,17 @@ sub get_info {
 sub parse_begin {
     my ($self,$parser) = @_;
 
-    my $fuzzy_data = $self->serialize_fuzzy($parser->{trailer});
-    $self->{fuzzy_md5}->add( $fuzzy_data );
-    $self->{fuzzy_md5_data} .= $fuzzy_data;
+    $self->add_fuzzy('V:'.$parser->{version});
 
+    my %trailer = %{$parser->{trailer}};
+    delete $trailer{'/ID'};
+    $self->add_fuzzy(\%trailer);
 }
 
 sub page_begin {
     my ($self, $page) = @_;
 
-    my $fuzzy_data = $self->serialize_fuzzy($page);
-    $self->{fuzzy_md5}->add( $fuzzy_data );
-    $self->{fuzzy_md5_data} .= $fuzzy_data;
+    $self->add_fuzzy($page);
 
     $self->{info}->{PageCount}++;
 
@@ -1093,9 +1091,7 @@ sub draw_image {
     $is_color = 0 if defined($image->{'/ColorSpace'}) && $image->{'/ColorSpace'} =~ /gray/i;
     $is_color = 0 if defined($image->{'/BitsPerComponent'}) && $image->{'/BitsPerComponent'} == 1;
 
-    my $fuzzy_data = $self->serialize_fuzzy($image);
-    $self->{fuzzy_md5}->add( $fuzzy_data );
-    $self->{fuzzy_md5_data} .= $fuzzy_data;
+    $self->add_fuzzy($image);
 
     $self->{info}->{ImageCount}++;
     $self->{info}->{ColorImageCount}++ if $is_color;
@@ -1116,9 +1112,7 @@ sub draw_image {
 sub uri {
     my ($self,$location,$rect,$page) = @_;
 
-    my $fuzzy_data = '/URI';
-    $self->{fuzzy_md5}->add( $fuzzy_data );
-    $self->{fuzzy_md5_data} .= $fuzzy_data;
+    $self->add_fuzzy('\URI');
 
     $self->{info}->{uris}->{$location} = 1;
     $self->{info}->{LinkCount}++;
@@ -1201,6 +1195,13 @@ sub parse_end {
 
 }
 
+sub add_fuzzy {
+    my ($self,$obj) = @_;
+    my $data = $self->serialize_fuzzy($obj);
+    $self->{fuzzy_md5}->add( $data );
+    # print "Fuzzy: $data\n";
+}
+
 sub serialize_fuzzy {
     my ($self,$obj) = @_;
 
@@ -1220,9 +1221,6 @@ sub serialize_fuzzy {
             $str .= $_ . $self->serialize_fuzzy( $obj->{$_} );
         }
         return $str;
-    } elsif ( $obj =~ /^\d+ \d+ R$/ )  {
-        # object reference
-        return 'R';
     } elsif ( $obj =~ /^[\d.+-]+$/ ) {
         # number
         return 'N';
@@ -1230,12 +1228,6 @@ sub serialize_fuzzy {
         # date
         return 'D';
     }
-
-    # replace binary data with the letter 'B'
-    eval {
-        my $tmp = $obj;
-        decode('utf-8-strict',$tmp,Encode::FB_CROAK);
-    } or return 'B';
 
     # include data as-is
     return $obj;
@@ -2411,7 +2403,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.27;
+my $VERSION = 0.28;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

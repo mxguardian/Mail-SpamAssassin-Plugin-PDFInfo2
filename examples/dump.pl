@@ -41,7 +41,7 @@ my $pdf = Mail::SpamAssassin::PDF::Parser->new(
     context         => $context
 );
 
-$pdf->parse($data);
+$pdf->parse(\$data);
 
 if ( defined $opts{o} ) {
     my $ref = $opts{o};

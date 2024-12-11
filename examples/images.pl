@@ -35,4 +35,4 @@ my $pdf = Mail::SpamAssassin::PDF::Parser->new(
     context         => $context
 );
 
-$pdf->parse($data);
+$pdf->parse(\$data);
