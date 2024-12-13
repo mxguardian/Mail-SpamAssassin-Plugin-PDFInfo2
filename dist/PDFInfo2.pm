@@ -2058,7 +2058,7 @@ sub _parse_action {
 
     if ( $action->{'/S'} eq '/URI' ) {
         my $location = $action->{'/URI'};
-        if ( $location =~ /^\w+:/ ) {
+        if ( $location =~ /^[a-z]+:/i ) {
             $rect = $self->_dereference($rect);
             $_ = $self->_dereference($_) for (@{$rect});
             $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
@@ -2403,7 +2403,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.28;
+my $VERSION = 0.29;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
