@@ -23,6 +23,8 @@ sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/Decrypt
 echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/FlateDecode.pm >>$OUTFILE
 echo >>$OUTFILE
+sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/LZWDecode.pm >>$OUTFILE
+echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Filter/ASCII85Decode.pm >>$OUTFILE
 echo >>$OUTFILE
 sed '/^use Mail::SpamAssassin::PDF::/d' lib/Mail/SpamAssassin/PDF/Parser.pm >>$OUTFILE

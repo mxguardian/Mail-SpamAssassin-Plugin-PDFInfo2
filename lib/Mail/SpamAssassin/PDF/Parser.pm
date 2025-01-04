@@ -22,6 +22,7 @@ use warnings FATAL => 'all';
 use Mail::SpamAssassin::PDF::Core;
 use Mail::SpamAssassin::PDF::Context::Info;
 use Mail::SpamAssassin::PDF::Filter::FlateDecode;
+use Mail::SpamAssassin::PDF::Filter::LZWDecode;
 use Mail::SpamAssassin::PDF::Filter::ASCII85Decode;
 use Mail::SpamAssassin::PDF::Filter::Decrypt;
 use Mail::SpamAssassin::PDF::Filter::CharMap;
@@ -771,6 +772,9 @@ sub _get_stream_data {
         $filter = $abbreviations{$filter} if defined($abbreviations{$filter});
         if ( $filter eq '/FlateDecode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::FlateDecode->new($decodeParms);
+            $stream_data = $f->decode($stream_data);
+        } elsif ( $filter eq '/LZWDecode' ) {
+            my $f = Mail::SpamAssassin::PDF::Filter::LZWDecode->new($decodeParms);
             $stream_data = $f->decode($stream_data);
         } elsif ( $filter eq '/ASCII85Decode' ) {
             my $f = Mail::SpamAssassin::PDF::Filter::ASCII85Decode->new();
