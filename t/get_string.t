@@ -20,6 +20,9 @@ my @tests = (
         input  => '(Please fax completed form to (407) 555-0111)',
         output => 'Please fax completed form to (407) 555-0111',
     },{
+        input  => "(This is binary data that ends with a nul byte\x{00})",
+        output => "This is binary data that ends with a nul byte\x{00}",
+    },{
         input  => '()',
         output => '',
     }

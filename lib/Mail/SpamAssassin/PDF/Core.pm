@@ -540,9 +540,6 @@ sub _get_string {
         from_to($str,'UTF-16le', 'UTF-8');
     }
 
-    # remove trailing null chars
-    $str =~ s/\x00+$//;
-
     return wantarray ? ($str,TYPE_STRING) : $str;
 }
 

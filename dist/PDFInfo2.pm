@@ -810,9 +810,6 @@ sub _get_string {
         from_to($str,'UTF-16le', 'UTF-8');
     }
 
-    # remove trailing null chars
-    $str =~ s/\x00+$//;
-
     return wantarray ? ($str,TYPE_STRING) : $str;
 }
 
@@ -2567,7 +2564,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.30;
+my $VERSION = 0.31;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
