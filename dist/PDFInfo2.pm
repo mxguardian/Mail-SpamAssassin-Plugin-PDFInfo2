@@ -150,6 +150,12 @@ This plugin defines the following eval rules:
         viewer. This plugin attempts to decrypt PDF's with a blank password. However, pdf2_is_encrypted still
         returns true.
 
+  pdf2_is_encrypted_blank_pw()
+
+     body RULENAME eval:pdf2_is_encrypted_blank_pw()
+
+        Fires if any PDF attachment is encrypted with a blank password
+
   pdf2_is_protected()
 
      body RULENAME eval:pdf2_is_protected()
@@ -2564,7 +2570,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.31;
+my $VERSION = 0.32;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
@@ -2593,6 +2599,7 @@ sub new {
     $self->register_eval_rule ("pdf2_match_fuzzy_md5", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_match_details", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_is_encrypted_blank_pw", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_is_protected", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
@@ -2732,6 +2739,8 @@ sub parsed_metadata {
         $pms->{pdfinfo2}->{totals}->{PageArea} += $info->{PageArea};
         $pms->{pdfinfo2}->{totals}->{Encrypted} += $info->{Encrypted};
         $pms->{pdfinfo2}->{totals}->{Protected} += $info->{Protected};
+        $pms->{pdfinfo2}->{totals}->{EncryptedBlankPw} +=
+            ($info->{Encrypted} && !$info->{Protected}) ? 1 : 0;
 
         _set_tag($pms, 'PDF2PRODUCER', $info->{Producer});
         _set_tag($pms, 'PDF2AUTHOR', $info->{Author});
@@ -2806,6 +2815,12 @@ sub pdf2_is_encrypted {
     my ($self, $pms, $body) = @_;
 
     return $pms->{pdfinfo2}->{totals}->{Encrypted} ? 1 : 0;
+}
+
+sub pdf2_is_encrypted_blank_pw {
+    my ($self, $pms, $body) = @_;
+
+    return $pms->{pdfinfo2}->{totals}->{EncryptedBlankPw} ? 1 : 0;
 }
 
 sub pdf2_is_protected {

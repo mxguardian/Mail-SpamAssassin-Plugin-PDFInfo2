@@ -114,6 +114,12 @@ This plugin defines the following eval rules:
           viewer. This plugin attempts to decrypt PDF's with a blank password. However, pdf2_is_encrypted still
           returns true.
 
+    pdf2_is_encrypted_blank_pw()
+
+       body RULENAME eval:pdf2_is_encrypted_blank_pw()
+
+          Fires if any PDF attachment is encrypted with a blank password
+
     pdf2_is_protected()
 
        body RULENAME eval:pdf2_is_protected()
