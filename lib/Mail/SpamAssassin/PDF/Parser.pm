@@ -714,11 +714,11 @@ sub _get_compressed_obj {
         my $data = $self->_get_stream_data($stream_obj);
         die "Error getting stream data for object $ref" unless defined($data);
         my $core = $stream_obj->{core} = $self->{core}->clone(\$data);
-        my @array;
-        while ( defined($_ = $core->get_number()) ) {
-            push(@array,$_);
+        for(my $n = $stream_obj->{'/N'}; $n > 0; $n--) {
+            my $key = $core->get_number();
+            die "Error getting xref key for object $ref" unless defined($key);
+            $stream_obj->{xref}->{$key} = $core->get_number();
         }
-        $stream_obj->{xref} = { @array };
         $stream_obj->{pos} = $core->pos();
     }
 
