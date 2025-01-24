@@ -81,7 +81,7 @@ sub new {
 =item clone($fh)
 
 Returns a new instance of the object with the same state as the original, but
-using the new file handle.
+using the new file handle. This is useful for parsing objects within objects.
 
 =cut
 
@@ -89,6 +89,8 @@ sub clone {
     my $self = shift;
     my $copy = bless { %$self }, ref $self;
     $copy->_init(@_);
+    # Disable encryption for cloned objects. The parent object is already decrypted.
+    undef $copy->{crypt};
     return $copy;
 }
 

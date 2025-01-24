@@ -612,7 +612,6 @@ sub _parse_contents {
     debug('stream',$stream);
 
     my $core = $self->{core}->clone(\$stream);
-    $core->{crypt} = undef;
 
     # Process commands
     while () {

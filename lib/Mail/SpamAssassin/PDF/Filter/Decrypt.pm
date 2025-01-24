@@ -73,11 +73,13 @@ sub decrypt {
     eval {
 
         if ( $self->{V} == 4 || $self->{V} == 5 ) {
-            # todo: Implement Crypt Filters
-            my $iv = substr($content,0,16);
-            my $m = Crypt::Mode::CBC->new('AES');
-            my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
-            return $m->decrypt(substr($content,16),$key,$iv);
+            # todo: Implement Crypt Filters besides the standard one
+            if ( $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2' ) {
+                my $iv = substr($content,0,16);
+                my $m = Crypt::Mode::CBC->new('AES');
+                my $key = $self->_compute_key();
+                return $m->decrypt(substr($content,16),$key,$iv);
+            }
         }
         return Crypt::RC4::RC4($self->_compute_key(), $content);
 
@@ -240,7 +242,7 @@ sub _compute_key {
         $md5->add($self->{code});
         $md5->add(substr($objstr, 0, 3).substr($genstr, 0, 2));
         if ( $self->{V} == 4  || $self->{V} == 5 ) {
-            $md5->add('sAlT');
+            $md5->add('sAlT') if $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2';
         }
         my $hash = $md5->digest();
 

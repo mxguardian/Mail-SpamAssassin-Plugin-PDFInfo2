@@ -357,7 +357,7 @@ sub new {
 =item clone($fh)
 
 Returns a new instance of the object with the same state as the original, but
-using the new file handle.
+using the new file handle. This is useful for parsing objects within objects.
 
 =cut
 
@@ -365,6 +365,8 @@ sub clone {
     my $self = shift;
     my $copy = bless { %$self }, ref $self;
     $copy->_init(@_);
+    # Disable encryption for cloned objects. The parent object is already decrypted.
+    undef $copy->{crypt};
     return $copy;
 }
 
@@ -1328,11 +1330,13 @@ sub decrypt {
     eval {
 
         if ( $self->{V} == 4 || $self->{V} == 5 ) {
-            # todo: Implement Crypt Filters
-            my $iv = substr($content,0,16);
-            my $m = Crypt::Mode::CBC->new('AES');
-            my $key = $self->{V} == 4 ? $self->_compute_key() : $self->{code};
-            return $m->decrypt(substr($content,16),$key,$iv);
+            # todo: Implement Crypt Filters besides the standard one
+            if ( $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2' ) {
+                my $iv = substr($content,0,16);
+                my $m = Crypt::Mode::CBC->new('AES');
+                my $key = $self->_compute_key();
+                return $m->decrypt(substr($content,16),$key,$iv);
+            }
         }
         return Crypt::RC4::RC4($self->_compute_key(), $content);
 
@@ -1495,7 +1499,7 @@ sub _compute_key {
         $md5->add($self->{code});
         $md5->add(substr($objstr, 0, 3).substr($genstr, 0, 2));
         if ( $self->{V} == 4  || $self->{V} == 5 ) {
-            $md5->add('sAlT');
+            $md5->add('sAlT') if $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2';
         }
         my $hash = $md5->digest();
 
@@ -2366,7 +2370,6 @@ sub _parse_contents {
     debug('stream',$stream);
 
     my $core = $self->{core}->clone(\$stream);
-    $core->{crypt} = undef;
 
     # Process commands
     while () {
@@ -2570,7 +2573,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.33;
+my $VERSION = 0.34;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
