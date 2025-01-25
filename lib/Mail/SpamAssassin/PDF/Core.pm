@@ -357,7 +357,7 @@ sub get_startxref {
     # read backwards from the end of the file looking for 'startxref'
     my $tok = '';
     my $pos = -1;
-    my $limit = 1024;
+    my $limit = 65536;
     while ($limit--) {
         seek($fh,$pos--,2);
         my $ch = getc($fh);
@@ -373,7 +373,7 @@ sub get_startxref {
         $tok = $ch . $tok;
     }
 
-    croak "EOF marker not found" unless $tok eq 'startxref';
+    croak "startxref marker not found" unless $tok eq 'startxref';
 
     my $xref = $self->get_number();
     croak "Invalid startxref" unless defined($xref);
