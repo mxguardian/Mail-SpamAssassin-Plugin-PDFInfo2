@@ -106,6 +106,12 @@ sub uri {
 sub parse_end {
     my ($self,$parser) = @_;
 
+    $self->{info}->{Encrypted} = $parser->is_encrypted();
+    $self->{info}->{Protected} = $parser->is_protected();
+    $self->{info}->{Version} = $parser->{version};
+
+    return if $parser->is_protected();
+
     $self->{info}->{ImageArea} = _round($self->{info}->{ImageArea},0);
     $self->{info}->{PageArea} = _round($self->{info}->{PageArea},0);
     $self->{info}->{ClickArea} = _round($self->{info}->{ClickArea},0);
@@ -118,17 +124,11 @@ sub parse_end {
         $self->{info}->{ClickRatio} = 0;
     }
 
-    if ( !$parser->is_protected() ) {
-        for (keys %{$parser->{trailer}->{'/Info'}}) {
-            my $key = $_;
-            $key =~ s/^\///; # Trim leading slash
-            $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
-        }
+    for (keys %{$parser->{trailer}->{'/Info'}}) {
+        my $key = $_;
+        $key =~ s/^\///; # Trim leading slash
+        $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
     }
-
-    $self->{info}->{Encrypted} = $parser->is_encrypted();
-    $self->{info}->{Protected} = $parser->is_protected();
-    $self->{info}->{Version} = $parser->{version};
 
     # Compute MD5
     my $md5 = Digest::MD5->new();

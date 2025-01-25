@@ -53,7 +53,8 @@ sub new {
     my $password = '';
 
     if ( !$self->_check_user_password($password) ) {
-        croak "Document is password-protected.";
+        warn "Document is password protected\n";
+        return;
     }
 
     $self;

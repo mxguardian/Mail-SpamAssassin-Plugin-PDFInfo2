@@ -126,9 +126,8 @@ This plugin defines the following eval rules:
 
           Fires if any PDF attachment is encrypted with a non-blank password
 
-          Note: Although it's not possible to inspect the contents of password-protected PDF's, the following
-          tests still provide meaningful data: pdf2_count, pdf2_page_count, pdf2_match_md5,
-          pdf2_match_fuzzy_md5, and pdf2_match_details('Version'). All other values will be empty/zero.
+          Note: If the PDF is encrypted with a non-blank password, all other values will be empty
+          except pdf2_match_details('Version')
 
 The following rules only inspect the first page of each document
 

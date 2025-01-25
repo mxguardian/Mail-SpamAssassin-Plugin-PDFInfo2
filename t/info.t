@@ -371,22 +371,17 @@ my @tests = (
     {
         filename => 't/ham/Password.pdf',
         expected => {
-            'Version' => '1.6',
-            'uris' => {},
-            'Protected' => 1,
-            'MD5Fuzzy1' => '3711EEFE2D9276D4A2FB9F648BD37C8C',
-            'MD5Fuzzy2' => '7F24742E76DEB241E26987C1D100268C',
-            'MD5'           => '30694E15C217049D641BA7E2FAE57BD6',
-            'ImageCount' => 0,
+            'ClickArea' => 0,
             'ColorImageCount' => 0,
             'Encrypted' => 1,
-            'PageCount' => 2,
-            'ClickRatio' => '0.00',
-            'ClickArea' => 0,
-            'PageArea' => 530067,
             'ImageArea' => 0,
-            'ImageRatio' => '0.00',
-            'LinkCount' => 0
+            'ImageCount' => 0,
+            'LinkCount' => 0,
+            'PageArea' => 0,
+            'PageCount' => 0,
+            'Protected' => 1,
+            'Version' => '1.6',
+            'uris' => {}
         }
     },
     {

@@ -162,9 +162,8 @@ This plugin defines the following eval rules:
 
         Fires if any PDF attachment is encrypted with a non-blank password
 
-        Note: Although it's not possible to inspect the contents of password-protected PDF's, the following
-        tests still provide meaningful data: pdf2_count, pdf2_page_count, pdf2_match_md5,
-        pdf2_match_fuzzy_md5, and pdf2_match_details('Version'). All other values will be empty/zero.
+        Note: If the PDF is encrypted with a non-blank password, all other values will be empty
+        except pdf2_match_details('Version')
 
 The following rules only inspect the first page of each document
 
@@ -1138,6 +1137,12 @@ sub uri {
 sub parse_end {
     my ($self,$parser) = @_;
 
+    $self->{info}->{Encrypted} = $parser->is_encrypted();
+    $self->{info}->{Protected} = $parser->is_protected();
+    $self->{info}->{Version} = $parser->{version};
+
+    return if $parser->is_protected();
+
     $self->{info}->{ImageArea} = _round($self->{info}->{ImageArea},0);
     $self->{info}->{PageArea} = _round($self->{info}->{PageArea},0);
     $self->{info}->{ClickArea} = _round($self->{info}->{ClickArea},0);
@@ -1150,17 +1155,11 @@ sub parse_end {
         $self->{info}->{ClickRatio} = 0;
     }
 
-    if ( !$parser->is_protected() ) {
-        for (keys %{$parser->{trailer}->{'/Info'}}) {
-            my $key = $_;
-            $key =~ s/^\///; # Trim leading slash
-            $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
-        }
+    for (keys %{$parser->{trailer}->{'/Info'}}) {
+        my $key = $_;
+        $key =~ s/^\///; # Trim leading slash
+        $self->{info}->{$key} = $parser->{trailer}->{'/Info'}->{$_};
     }
-
-    $self->{info}->{Encrypted} = $parser->is_encrypted();
-    $self->{info}->{Protected} = $parser->is_protected();
-    $self->{info}->{Version} = $parser->{version};
 
     # Compute MD5
     my $md5 = Digest::MD5->new();
@@ -1310,7 +1309,8 @@ sub new {
     my $password = '';
 
     if ( !$self->_check_user_password($password) ) {
-        croak "Document is password-protected.";
+        warn "Document is password protected\n";
+        return;
     }
 
     $self;
@@ -1891,29 +1891,33 @@ sub parse {
         debug('trace',"Calling _parse_encrypt");
         $self->_parse_encrypt($self->{trailer}->{'/Encrypt'}) if defined($self->{trailer}->{'/Encrypt'});
 
-        # Parse info object
-        debug('trace',"Calling _parse_info");
-        $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
-        debug('info',$self->{trailer}->{'/Info'});
-        $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
-        debug('root',$self->{trailer}->{'/Root'});
+        if ( !$self->{is_protected} ) {
 
-        # Parse catalog
-        my $root = $self->{trailer}->{'/Root'};
-        if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
-            $root->{'/OpenAction'} = $self->_dereference($root->{'/OpenAction'});
-            debug('trace',"Calling _parse_action");
-            $self->_parse_action($root->{'/OpenAction'});
+            # Parse info object
+            debug('trace',"Calling _parse_info");
+            $self->{trailer}->{'/Info'} = $self->_parse_info($self->{trailer}->{'/Info'});
+            debug('info',$self->{trailer}->{'/Info'});
+            $self->{trailer}->{'/Root'} = $self->_get_obj($self->{trailer}->{'/Root'});
+            debug('root',$self->{trailer}->{'/Root'});
+
+            # Parse catalog
+            my $root = $self->{trailer}->{'/Root'};
+            if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
+                $root->{'/OpenAction'} = $self->_dereference($root->{'/OpenAction'});
+                debug('trace',"Calling _parse_action");
+                $self->_parse_action($root->{'/OpenAction'});
+            }
+
+            if ($self->{context}->can('parse_begin')) {
+                debug('trace',"Calling _parse_begin");
+                $self->{context}->parse_begin($self);
+            }
+
+            # Parse page tree
+            debug('trace',"Calling _parse_pages");
+            $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
+
         }
-
-        if ($self->{context}->can('parse_begin')) {
-            debug('trace',"Calling _parse_begin");
-            $self->{context}->parse_begin($self);
-        }
-
-        # Parse page tree
-        debug('trace',"Calling _parse_pages");
-        $root->{'/Pages'} = $self->_parse_pages($root->{'/Pages'});
 
         if ($self->{context}->can('parse_end')) {
             debug('trace',"Calling _parse_end");
@@ -2133,11 +2137,8 @@ sub _parse_encrypt {
         die "Encryption filter $encrypt->{'/Filter'} not implemented";
     }
 
-    $self->{core}->{crypt} = eval {
-        Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
-    };
+    $self->{core}->{crypt} = Mail::SpamAssassin::PDF::Filter::Decrypt->new($encrypt,$self->{trailer}->{'/ID'}->[0]);
     if ( !defined($self->{core}->{crypt}) ) {
-        die $@ unless $@ =~ /password/;
         $self->{is_protected} = 1;
     }
     $self->{is_encrypted} = 1;
@@ -2287,7 +2288,10 @@ sub _parse_contents {
         cm => sub { $context->concat_matrix(@_) },
         Do => sub {
             my $xobj = $resources->{'/XObject'}->{$_[0]};
-            die "XObject $_[0] not found: " unless (defined($xobj));
+            unless (defined($xobj)) {
+                warn "XObject $_[0] not found: ";
+                return;
+            }
             $xobj->{_name} = $_[0];
             if ( $xobj->{'/Subtype'} eq '/Image' ) {
                 $context->draw_image($xobj,$page) if $self->{context}->can('draw_image');
@@ -2428,7 +2432,7 @@ sub _get_obj {
         my $obj;
         if ( ref($self->{xref}->{$ref}) eq 'ARRAY' ) {
             my ($stream_obj_ref,$index) = @{$self->{xref}->{$ref}};
-            debug('trace',"Getting compressed object $ref");
+            debug('trace',"Getting compressed object $ref from $stream_obj_ref");
             $obj = $self->_get_compressed_obj($stream_obj_ref,$index,$ref);
         } else {
             $core->pos($self->{xref}->{$ref});
@@ -2573,7 +2577,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.35;
+my $VERSION = 0.36;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
