@@ -1327,7 +1327,7 @@ sub decrypt {
 
     return $content unless defined($content) && length($content);
 
-    eval {
+    my $plaintext = eval {
 
         if ( $self->{V} == 4 || $self->{V} == 5 ) {
             # todo: Implement Crypt Filters besides the standard one
@@ -1340,12 +1340,14 @@ sub decrypt {
         }
         return Crypt::RC4::RC4($self->_compute_key(), $content);
 
-    } or do {
+    };
+    if ($@) {
         my $err = $@;
         $err =~ s/\n//g;
         croak "Error decrypting object $self->{objnum} $self->{gennum}: $err";
     };
 
+    return $plaintext;
 }
 
 #
@@ -2577,7 +2579,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.36;
+my $VERSION = 0.37;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
