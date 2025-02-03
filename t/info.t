@@ -68,7 +68,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/spam/Encrypted.pdf',
+        filename => 't/spam/Encrypted_RC4.pdf',
         expected => {
             'Encrypted' => 1,
             'Protected'    => 0,
@@ -97,7 +97,7 @@ my @tests = (
         }
     },
     {
-        filename => 't/spam/Encrypted2.pdf',
+        filename => 't/spam/Encrypted_AESV2.pdf',
         expected => {
             'Protected'    => 0,
             'Producer' => "iText\xAE 5.5.13.3 \xA92000-2022 iText Group NV (AGPL-version)",
@@ -600,6 +600,34 @@ my @tests = (
             'JavaScript'      => 0,
         }
     },
+    {
+        filename => 't/ham/Encrypted_AESV3.pdf',
+        expected => {
+            'ClickArea' => 0,
+            'ClickRatio' => '0.00',
+            'ColorImageCount' => 3,
+            'CreationDate' => 'D:20250201214212+00\'00\'',
+            'Creator' => 'Telerik Reporting 12.1.18.620 (http://www.telerik.com/products/reporting.aspx)',
+            'Encrypted' => 1,
+            'ImageArea' => 256669,
+            'ImageCount' => 3,
+            'ImageRatio' => '51.22',
+            'JavaScript' => 0,
+            'LinkCount' => 0,
+            'MD5' => '66E5DC76375154124E3ADF6995D6AE4F',
+            'MD5Fuzzy1' => '0A6B472658F0F86AB1B0FED9C7FB67BF',
+            'MD5Fuzzy2' => '85D451EA12FEAF6CD8D0E9ADA9E4FDC4',
+            'ModDate' => 'D:20250202042119+02\'00\'',
+            'OpenAction' => 0,
+            'PageArea' => 501157,
+            'PageCount' => 10,
+            'Producer' => 'Telerik Reporting 12.1.18.620 (http://www.telerik.com/products/reporting.aspx) (via http://bfo.com/products/pdf?version=1.2.6-r42695)',
+            'Protected' => 0,
+            'Title' => '3874-Fiscal Year Expense Statement-18944647-0000-20250131.pdf',
+            'Version' => '1.7',
+            'uris' => {}
+        }
+    }
 );
 
 plan tests => scalar(@tests);

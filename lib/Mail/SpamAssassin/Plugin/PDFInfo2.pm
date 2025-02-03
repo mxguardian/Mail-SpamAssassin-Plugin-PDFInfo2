@@ -299,7 +299,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.38;
+my $VERSION = 0.40;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

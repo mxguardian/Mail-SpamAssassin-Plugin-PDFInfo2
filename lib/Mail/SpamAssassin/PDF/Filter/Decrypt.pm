@@ -75,7 +75,7 @@ sub decrypt {
 
         if ( $self->{V} == 4 || $self->{V} == 5 ) {
             # todo: Implement Crypt Filters besides the standard one
-            if ( $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2' ) {
+            if ( $self->{CF}->{'/StdCF'}->{'/CFM'} =~ /AES/ ) {
                 my $iv = substr($content,0,16);
                 my $m = Crypt::Mode::CBC->new('AES');
                 my $key = $self->_compute_key();
@@ -165,7 +165,7 @@ sub _check_user_password {
         my $sha = Digest::SHA->new(256);
         $sha->add($pass);
         $sha->add(substr($self->{U},32,8));
-        my $hash = $sha->digest();
+        $hash = $sha->digest();
 
         # validate password
         if ($hash ne substr($self->{U}, 0, 32)) {
@@ -184,6 +184,67 @@ sub _check_user_password {
         $self->{code} = $m->decrypt($self->{UE},$temp_key,$iv);
         return 1;
 
+    } elsif ( $self->{R} == 6 ) {
+
+        # truncate the password to 127 bytes
+        $pass = substr($pass,0,127);
+
+        # Test the password against the owner key
+        my $owner_validation_salt = substr($self->{O},32,8);
+        $hash = $self->_compute_hash(
+            $self->{R},
+            $pass,
+            $owner_validation_salt,
+            $self->{U},
+        );
+
+        if ($hash eq substr($self->{O}, 0, 32)) {
+            # Found the owner password
+            # Compute intermediate key
+            my $owner_key_salt = substr($self->{O},40,8);
+            my $temp_key = $self->_compute_hash(
+                $self->{R},
+                $pass,
+                $owner_key_salt,
+                $self->{U}
+            );
+            # The 32-byte result is the key used to decrypt the 32-byte OE string using AES-256 in CBC mode
+            # with no padding and an initialization vector of zero. The 32-byte result is the file encryption key.
+            my $m = Crypt::Mode::CBC->new('AES', 0);
+            my $iv = "\0" x 16;
+            $self->{code} = $m->decrypt($self->{OE},$temp_key,$iv);
+            return 1;
+        }
+
+        # Test the password against the user key
+        my $user_validation_salt = substr($self->{U},32,8);
+        $hash = $self->_compute_hash(
+            $self->{R},
+            $pass,
+            $user_validation_salt,
+            '',
+        );
+
+        if ($hash eq substr($self->{U}, 0, 32)) {
+            # Found the user password
+            # Compute intermediate key
+            my $user_key_salt = substr($self->{U},40,8);
+            my $temp_key = $self->_compute_hash(
+                $self->{R},
+                $pass,
+                $user_key_salt,
+                ''
+            );
+            # The 32-byte result is the key used to decrypt the 32-byte UE string using AES-256 in CBC mode
+            # with no padding and an initialization vector of zero. The 32-byte result is the file encryption key.
+            my $m = Crypt::Mode::CBC->new('AES', 0);
+            my $iv = "\0" x 16;
+            $self->{code} = $m->decrypt($self->{UE},$temp_key,$iv);
+            return 1;
+        }
+
+        return 0;
+
     } else {
         croak "Revision $self->{R} not implemented";
     }
@@ -191,6 +252,41 @@ sub _check_user_password {
     return 0;
 }
 
+#
+# Algorithm 2.B: Computing a hash (revision 6 and later)
+#
+sub _compute_hash {
+    my ($self,$R,$pass,$salt,$udata) = @_;
+
+    my $k = Digest::SHA::sha256($pass.$salt.$udata);
+    return $k if $R < 6;
+
+    my $round = 0;
+    while (1) {
+        my $k1 = ($pass . $k . $udata) x 64;
+        my $m = Crypt::Mode::CBC->new('AES', 0);
+        my $iv = substr($k, 16, 16);
+        my $key = substr($k, 0, 16);
+        my $e = $m->encrypt($k1, $key, $iv);
+
+        my $first16 = substr($e, 0, 16);
+        my $mod = 0;
+        foreach my $byte (unpack("C*", $first16)) {
+            $mod = ($mod * 256 + $byte) % 3;
+        }
+
+        if ($mod == 0) {
+            $k = Digest::SHA::sha256($e);
+        } elsif ($mod == 1) {
+            $k = Digest::SHA::sha384($e);
+        } else {  # $mod == 2
+            $k = Digest::SHA::sha512($e);
+        }
+
+        last if ++$round >= 64 && unpack("C", substr($e, -1, 1)) <= ($round - 32);
+    }
+    return substr($k, 0, 32);
+}
 
 #
 # Algorithm 3.2 Computing an encryption key
@@ -235,6 +331,10 @@ sub _generate_key {
 
 sub _compute_key {
     my ($self) = @_;
+
+    if ($self->{R} == 6) {
+        return $self->{code};
+    }
 
     my $id = $self->{objnum} . '_' .$self->{gennum};
     if (!exists $self->{keycache}->{$id}) {
