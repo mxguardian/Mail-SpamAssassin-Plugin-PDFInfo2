@@ -51,6 +51,8 @@ Links to the official PDF specification:
 
 =item Version 1.7 Extension Level 3: L<https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe_supplement_iso32000.pdf>
 
+=item Version 2.0: L<https://developer.adobe.com/document-services/docs/assets/5b15559b96303194340b99820d3a70fa/PDF_ISO_32000-2.pdf>
+
 =back
 
 =head1 REQUIREMENTS
@@ -164,6 +166,18 @@ This plugin defines the following eval rules:
 
         Note: If the PDF is encrypted with a non-blank password, all other values will be empty
         except pdf2_match_details('Version')
+
+  pdf2_has_javascript()
+
+     body RULENAME eval:pdf2_has_javascript()
+
+        Fires if any PDF attachment has JavaScript
+
+  pdf2_has_open_action()
+
+     body RULENAME eval:pdf2_has_open_action()
+
+        Fires if any PDF attachment has an OpenAction
 
 The following rules only inspect the first page of each document
 
@@ -285,7 +299,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.37;
+my $VERSION = 0.38;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
@@ -316,6 +330,8 @@ sub new {
     $self->register_eval_rule ("pdf2_is_encrypted", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_is_encrypted_blank_pw", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
     $self->register_eval_rule ("pdf2_is_protected", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_has_javascript", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
+    $self->register_eval_rule ("pdf2_has_open_action", $Mail::SpamAssassin::Conf::TYPE_BODY_EVALS);
 
     # lower priority for add_uri_detail_list to work
     $self->register_method_priority ("parsed_metadata", -1);
@@ -417,7 +433,14 @@ sub parsed_metadata {
         ColorImageCount => 0,
         LinkCount       => 0,
         PageCount       => 0,
-        WordCount       => 0
+        WordCount       => 0,
+        ImageArea       => 0,
+        PageArea        => 0,
+        OpenAction      => 0,
+        JavaScript      => 0,
+        Encrypted       => 0,
+        Protected       => 0,
+        EncryptedBlankPw => 0,
     };
 
     foreach my $p (@{ $pms->{msg}->{pdfparts} }) {
@@ -452,6 +475,8 @@ sub parsed_metadata {
         $pms->{pdfinfo2}->{totals}->{WordCount} += $info->{WordCount};
         $pms->{pdfinfo2}->{totals}->{ImageArea} += $info->{ImageArea};
         $pms->{pdfinfo2}->{totals}->{PageArea} += $info->{PageArea};
+        $pms->{pdfinfo2}->{totals}->{OpenAction} += $info->{OpenAction};
+        $pms->{pdfinfo2}->{totals}->{JavaScript} += $info->{JavaScript};
         $pms->{pdfinfo2}->{totals}->{Encrypted} += $info->{Encrypted};
         $pms->{pdfinfo2}->{totals}->{Protected} += $info->{Protected};
         $pms->{pdfinfo2}->{totals}->{EncryptedBlankPw} +=
@@ -542,6 +567,18 @@ sub pdf2_is_protected {
     my ($self, $pms, $body) = @_;
 
     return $pms->{pdfinfo2}->{totals}->{Protected} ? 1 : 0;
+}
+
+sub pdf2_has_open_action {
+    my ($self, $pms, $body) = @_;
+
+    return $pms->{pdfinfo2}->{totals}->{OpenAction} ? 1 : 0;
+}
+
+sub pdf2_has_javascript {
+    my ($self, $pms, $body) = @_;
+
+    return $pms->{pdfinfo2}->{totals}->{JavaScript} ? 1 : 0;
 }
 
 sub pdf2_count {

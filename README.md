@@ -22,6 +22,7 @@ Links to the official PDF specification:
 - Version 1.6: [https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.6.pdf](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.6.pdf)
 - Version 1.7: [https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000\_2008.pdf](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)
 - Version 1.7 Extension Level 3: [https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe\_supplement\_iso32000.pdf](https://web.archive.org/web/20210326023925/https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/adobe_supplement_iso32000.pdf)
+- Version 2.0: [https://developer.adobe.com/document-services/docs/assets/5b15559b96303194340b99820d3a70fa/PDF\_ISO\_32000-2.pdf](https://developer.adobe.com/document-services/docs/assets/5b15559b96303194340b99820d3a70fa/PDF_ISO_32000-2.pdf)
 
 # REQUIREMENTS
 
@@ -128,6 +129,18 @@ This plugin defines the following eval rules:
 
           Note: If the PDF is encrypted with a non-blank password, all other values will be empty
           except pdf2_match_details('Version')
+
+    pdf2_has_javascript()
+
+       body RULENAME eval:pdf2_has_javascript()
+
+          Fires if any PDF attachment has JavaScript
+
+    pdf2_has_open_action()
+
+       body RULENAME eval:pdf2_has_open_action()
+
+          Fires if any PDF attachment has an OpenAction
 
 The following rules only inspect the first page of each document
 

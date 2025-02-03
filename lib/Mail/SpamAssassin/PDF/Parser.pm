@@ -146,8 +146,13 @@ sub parse {
             my $root = $self->{trailer}->{'/Root'};
             if (defined($root->{'/OpenAction'}) && ref($root->{'/OpenAction'}) eq 'HASH') {
                 $root->{'/OpenAction'} = $self->_dereference($root->{'/OpenAction'});
+                $self->{context}->open_action($root->{'/OpenAction'}) if $self->{context}->can('open_action');
                 debug('trace',"Calling _parse_action");
                 $self->_parse_action($root->{'/OpenAction'});
+            }
+            if (defined($root->{'/AA'}) ) {
+                # Additional Actions
+                $self->{context}->open_action($root->{'/AA'}) if $self->{context}->can('open_action');
             }
 
             if ($self->{context}->can('parse_begin')) {
@@ -474,6 +479,9 @@ sub _parse_action {
             $_ = $self->_dereference($_) for (@{$rect});
             $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
         }
+    }
+    if ( $action->{'/S'} eq '/JavaScript' ) {
+        $self->{context}->javascript($action->{'/JS'}) if $self->{context}->can('javascript');
     }
 
     if ( defined($action->{'/Next'}) ) {

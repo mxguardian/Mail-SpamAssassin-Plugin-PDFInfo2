@@ -32,6 +32,8 @@ my @tests = (
             'MD5'           => '246273E865CEC832E2AE2FCFCC200F8B',
             'ClickArea' => 0,
             'ClickRatio' => '0.00',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -61,6 +63,8 @@ my @tests = (
             'MD5'           => 'A38AC5E2012AF7F93024567250BE0AE9',
             'ClickArea' => 0,
             'ClickRatio' => '0.00',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -88,6 +92,8 @@ my @tests = (
             'MD5'           => '1D91627518DAA81A72A451056F8F653A',
             'ClickArea' => 347292,
             'ClickRatio' => '69.32',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -114,6 +120,8 @@ my @tests = (
             'ModDate' => 'D:20230102151215+01\'00\'',
             'ClickRatio' => '35.00',
             'ClickArea' => 175357,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -142,6 +150,8 @@ my @tests = (
             'Producer' => 'Qt 5.5.1',
             'ClickArea' => 1476,
             'ClickRatio' => '0.29',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -168,6 +178,8 @@ my @tests = (
             'MD5'           => 'B5DEE9C79BAC4B2990A54FF8C31E8FCD',
             'ClickArea' => 166726,
             'ClickRatio' => '34.40',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -194,6 +206,8 @@ my @tests = (
             'MD5'           => 'DC4851593138C810BA5FD93C47523D51',
             'ClickArea' => 501160,
             'ClickRatio' => '100.00',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -224,6 +238,8 @@ my @tests = (
             'MD5'           => 'FF705E05533CF8C98D1623D213FCB4FE',
             'ClickArea' => 5792,
             'ClickRatio' => '1.16',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -253,6 +269,8 @@ my @tests = (
             'MD5'           => 'A206B0ACDE4E212E8A1F699A9E87DD36',
             'ClickRatio' => '0.97',
             'ClickArea' => 4835,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -278,7 +296,9 @@ my @tests = (
             'ColorImageCount' => 1,
             'Encrypted' => 0,
             'PageCount' => 1,
-            'Producer' => 'Microsoft: Print To PDF'
+            'Producer' => 'Microsoft: Print To PDF',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -299,7 +319,9 @@ my @tests = (
             'Version' => '1.7',
             'uris' => {},
             'Encrypted' => 0,
-            'ImageArea' => 491447
+            'ImageArea' => 491447,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -330,7 +352,9 @@ my @tests = (
             'Keywords' => '',
             'ModDate' => 'D:20230120165641+03\'00\'',
             'PageArea' => 500990,
-            'ClickArea' => 295697
+            'ClickArea' => 295697,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -365,7 +389,9 @@ my @tests = (
                 'https://grelsin.blogspot.com/#qudjig0jnlqwc9fxyf' => 1,
                 'https://livius.org/#cddx' => 1,
                 'https://nikytap.de/04yb/#81zo' => 1
-            }
+            },
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -381,7 +407,9 @@ my @tests = (
             'PageCount' => 0,
             'Protected' => 1,
             'Version' => '1.6',
-            'uris' => {}
+            'uris' => {},
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -405,7 +433,10 @@ my @tests = (
             'Producer' => 'ImageMagick 6.7.8-9 2014-06-10 Q16 http://www.imagemagick.org',
             'Version' => '1.3',
             'ColorImageCount' => 0,
-            'ImageArea' => 473169        }
+            'ImageArea' => 473169,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
+        }
     },
     {
         filename => 't/ham/Form.pdf',
@@ -430,7 +461,9 @@ my @tests = (
             'ImageArea'       => 112586,
             'Trapped'         => '/False',
             'Protected'       => 0,
-            'uris'            => {}
+            'uris'            => {},
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -455,7 +488,9 @@ my @tests = (
             'Encrypted' => 1,
             'Protected' => 0,
             'PageArea' => 500990,
-            'Title' => 'TDPP'
+            'Title' => 'TDPP',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -478,7 +513,9 @@ my @tests = (
             'Producer' => 'FOP 0.20.4',
             'MD5Fuzzy2' => '3BF2940A3D61EE262C15DBE4C5966541',
             'Protected' => 0,
-            'Version' => '1.4'
+            'Version' => '1.4',
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -504,7 +541,9 @@ my @tests = (
             'LinkCount' => 0,
             'PageArea' => 484704,
             'MD5Fuzzy2' => 'C506E8DFDD529A6619E5DB8A414F5DE4',
-            'Protected' => 0
+            'Protected' => 0,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -527,7 +566,9 @@ my @tests = (
             'ColorImageCount' => 1,
             'ClickArea' => 0,
             'MD5Fuzzy1' => '7A041928149DAAFCC1E460345B44A445',
-            'PageCount' => 1
+            'PageCount' => 1,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
     {
@@ -554,7 +595,9 @@ my @tests = (
             'ModDate' => 'D:20221228084556+02\'00\'',
             'MD5Fuzzy2' => '5F87E80B7B0CBFEB9CFB6DB9554EFB44',
             'MD5' => '67235006AE5E672C1EB4660ACB532041',
-            'PageArea' => 484704
+            'PageArea' => 484704,
+            'OpenAction'      => 0,
+            'JavaScript'      => 0,
         }
     },
 );

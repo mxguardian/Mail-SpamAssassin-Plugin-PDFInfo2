@@ -19,6 +19,8 @@ sub new {
         ImageArea  => 0,
         ClickArea  => 0,
         LinkCount  => 0,
+        OpenAction => 0,
+        JavaScript => 0,
         uris       => {}
     };
     $self->{fuzzy_md5} = Digest::MD5->new();
@@ -101,6 +103,20 @@ sub uri {
         }
         $self->{info}->{ClickArea} += abs(($x2-$x1) * ($y2-$y1));
     }
+}
+
+sub javascript {
+    my ($self, $js) = @_;
+
+    $self->add_fuzzy('\JavaScript');
+    $self->{info}->{JavaScript} = 1;
+}
+
+sub open_action {
+    my ($self, $action) = @_;
+
+    $self->add_fuzzy($action);
+    $self->{info}->{OpenAction} = 1;
 }
 
 sub parse_end {
