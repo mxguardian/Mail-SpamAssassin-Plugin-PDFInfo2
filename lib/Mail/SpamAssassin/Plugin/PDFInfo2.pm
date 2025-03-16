@@ -299,7 +299,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.40;
+my $VERSION = 0.41;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 
@@ -490,9 +490,9 @@ sub parsed_metadata {
         _set_tag($pms, 'PDF2CLICKRATIO', $info->{ClickRatio});
         _set_tag($pms, 'PDF2VERSION', $info->{Version} );
 
-        $pms->{pdfinfo2}->{md5}->{$info->{MD5}} = 1;
-        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy1}} = 1;
-        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy2}} = 1;
+        $pms->{pdfinfo2}->{md5}->{$info->{MD5}} = 1 if defined $info->{MD5};
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy1}} = 1 if defined $info->{MD5Fuzzy1};
+        $pms->{pdfinfo2}->{fuzzy_md5}->{$info->{MD5Fuzzy2}} = 1 if defined $info->{MD5Fuzzy2};
         _set_tag($pms, 'PDF2MD5', $info->{MD5});
         _set_tag($pms, 'PDF2MD5FUZZY1', $info->{MD5Fuzzy1});
         _set_tag($pms, 'PDF2MD5FUZZY2', $info->{MD5Fuzzy2});
