@@ -28,6 +28,7 @@ use Mail::SpamAssassin::PDF::Filter::Decrypt;
 use Mail::SpamAssassin::PDF::Filter::CharMap;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
+use Encode qw(from_to);
 use Carp;
 
 my $debug;  # debugging level
@@ -400,6 +401,7 @@ sub _parse_info {
 
     foreach (keys %{$info}) {
         $info->{$_} = $self->_dereference($info->{$_});
+        _to_utf8($info->{$_});
     }
 
     return $info;
@@ -798,6 +800,51 @@ sub _get_stream_data {
     return $self->{stream_cache}->{$offset} = $stream_data;
 
 }
+
+# PDFDocEncoding mapping table from Adobe specs
+my %pdfdoc_to_unicode = (
+    # 0x80 - 0x9F (special symbols, different from Latin-1)
+    0x80 => 0x2022, # bullet
+    0x81 => 0x2020, # dagger
+    0x82 => 0x2021, # double dagger
+    0x83 => 0x2026, # ellipsis
+    0x84 => 0x2014, # em dash
+    0x85 => 0x2013, # en dash
+    0x86 => 0x0192, # florin
+    0x87 => 0x2044, # fraction slash
+    0x88 => 0x2039, # single left-pointing angle quote
+    0x89 => 0x203A, # single right-pointing angle quote
+    0x8A => 0x2212, # minus sign
+    0x8B => 0x2030, # per mille sign
+    0x8C => 0x201E, # double low-9 quote
+    0x8D => 0x201C, # left double quote
+    0x8E => 0x201D, # right double quote
+    0x8F => 0x2018, # left single quote
+    0x90 => 0x2019, # right single quote
+    0x91 => 0x201A, # single low-9 quote
+    0x92 => 0x2122, # trademark sign
+    0x93 => 0xFB01, # fi ligature
+    0x94 => 0xFB02, # fl ligature
+    # 0x95 - 0xFF (some match Latin-1, some are different)
+    0x95 => 0x0141, 0x96 => 0x0152, 0x97 => 0x0160, 0x98 => 0x0178,
+    0x99 => 0x017D, 0x9A => 0x0131, 0x9B => 0x0142, 0x9C => 0x0153,
+    0x9D => 0x0161, 0x9E => 0x017E, 0x9F => 0xFFFD, # (undefined)
+);
+
+sub _to_utf8 {
+
+    if ( $_[0] =~ s/^\xfe\xff// ) {
+        from_to($_[0],'UTF-16be', 'UTF-8');
+    } elsif ( $_[0] =~ s/^\xff\xfe// ) {
+        from_to($_[0],'UTF-16le', 'UTF-8');
+    } else {
+        # PDFDocEncoding
+        $_[0] =~ s/([\x80-\xFF])/exists($pdfdoc_to_unicode{ord($1)}) ? chr($pdfdoc_to_unicode{ord($1)}) : $1/ge;
+        utf8::encode($_[0]);
+    }
+
+}
+
 
 sub debug {
     my $level = shift;

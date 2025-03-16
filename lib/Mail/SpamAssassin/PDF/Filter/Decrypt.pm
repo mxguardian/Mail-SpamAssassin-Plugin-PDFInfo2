@@ -332,7 +332,8 @@ sub _generate_key {
 sub _compute_key {
     my ($self) = @_;
 
-    if ($self->{R} == 6) {
+    my $method = $self->{CF}->{'/StdCF'}->{'/CFM'} // '';
+    if ($method eq '/AESV3') {
         return $self->{code};
     }
 
@@ -345,7 +346,7 @@ sub _compute_key {
         $md5->add($self->{code});
         $md5->add(substr($objstr, 0, 3).substr($genstr, 0, 2));
         if ( $self->{V} == 4  || $self->{V} == 5 ) {
-            $md5->add('sAlT') if $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2';
+            $md5->add('sAlT') if $method eq '/AESV2';
         }
         my $hash = $md5->digest();
 

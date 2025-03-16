@@ -290,7 +290,6 @@ implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 package Mail::SpamAssassin::PDF::Core;
 use strict;
 use warnings FATAL => 'all';
-use Encode qw(from_to decode);
 use Carp;
 use Data::Dumper;
 
@@ -824,13 +823,6 @@ sub _get_string {
         $str = $self->{crypt}->decrypt($str);
     }
 
-    # Convert UTF-16 to UTF-8 and remove BOM
-    if ( $str =~ s/^\xfe\xff// ) {
-        from_to($str,'UTF-16be', 'UTF-8');
-    } elsif ( $str =~ s/^\xff\xfe// ) {
-        from_to($str,'UTF-16le', 'UTF-8');
-    }
-
     return wantarray ? ($str,TYPE_STRING) : $str;
 }
 
@@ -854,11 +846,6 @@ sub _get_hex_string {
         $str = $self->{crypt}->decrypt($str);
     }
 
-    if ( $str =~ s/^\xfe\xff// ) {
-        from_to($str,'UTF-16be', 'UTF-8');
-    } elsif ( $str =~ s/^\xff\xfe// ) {
-        from_to($str,'UTF-16le', 'UTF-8');
-    }
     return  wantarray ? ($str,TYPE_STRING) : $str;
 }
 
@@ -1618,7 +1605,8 @@ sub _generate_key {
 sub _compute_key {
     my ($self) = @_;
 
-    if ($self->{R} == 6) {
+    my $method = $self->{CF}->{'/StdCF'}->{'/CFM'} // '';
+    if ($method eq '/AESV3') {
         return $self->{code};
     }
 
@@ -1631,7 +1619,7 @@ sub _compute_key {
         $md5->add($self->{code});
         $md5->add(substr($objstr, 0, 3).substr($genstr, 0, 2));
         if ( $self->{V} == 4  || $self->{V} == 5 ) {
-            $md5->add('sAlT') if $self->{CF}->{'/StdCF'}->{'/CFM'} eq '/AESV2';
+            $md5->add('sAlT') if $method eq '/AESV2';
         }
         my $hash = $md5->digest();
 
@@ -1918,6 +1906,7 @@ use strict;
 use warnings FATAL => 'all';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
+use Encode qw(from_to);
 use Carp;
 
 my $debug;  # debugging level
@@ -2290,6 +2279,7 @@ sub _parse_info {
 
     foreach (keys %{$info}) {
         $info->{$_} = $self->_dereference($info->{$_});
+        _to_utf8($info->{$_});
     }
 
     return $info;
@@ -2689,6 +2679,51 @@ sub _get_stream_data {
 
 }
 
+# PDFDocEncoding mapping table from Adobe specs
+my %pdfdoc_to_unicode = (
+    # 0x80 - 0x9F (special symbols, different from Latin-1)
+    0x80 => 0x2022, # bullet
+    0x81 => 0x2020, # dagger
+    0x82 => 0x2021, # double dagger
+    0x83 => 0x2026, # ellipsis
+    0x84 => 0x2014, # em dash
+    0x85 => 0x2013, # en dash
+    0x86 => 0x0192, # florin
+    0x87 => 0x2044, # fraction slash
+    0x88 => 0x2039, # single left-pointing angle quote
+    0x89 => 0x203A, # single right-pointing angle quote
+    0x8A => 0x2212, # minus sign
+    0x8B => 0x2030, # per mille sign
+    0x8C => 0x201E, # double low-9 quote
+    0x8D => 0x201C, # left double quote
+    0x8E => 0x201D, # right double quote
+    0x8F => 0x2018, # left single quote
+    0x90 => 0x2019, # right single quote
+    0x91 => 0x201A, # single low-9 quote
+    0x92 => 0x2122, # trademark sign
+    0x93 => 0xFB01, # fi ligature
+    0x94 => 0xFB02, # fl ligature
+    # 0x95 - 0xFF (some match Latin-1, some are different)
+    0x95 => 0x0141, 0x96 => 0x0152, 0x97 => 0x0160, 0x98 => 0x0178,
+    0x99 => 0x017D, 0x9A => 0x0131, 0x9B => 0x0142, 0x9C => 0x0153,
+    0x9D => 0x0161, 0x9E => 0x017E, 0x9F => 0xFFFD, # (undefined)
+);
+
+sub _to_utf8 {
+
+    if ( $_[0] =~ s/^\xfe\xff// ) {
+        from_to($_[0],'UTF-16be', 'UTF-8');
+    } elsif ( $_[0] =~ s/^\xff\xfe// ) {
+        from_to($_[0],'UTF-16le', 'UTF-8');
+    } else {
+        # PDFDocEncoding
+        $_[0] =~ s/([\x80-\xFF])/exists($pdfdoc_to_unicode{ord($1)}) ? chr($pdfdoc_to_unicode{ord($1)}) : $1/ge;
+        utf8::encode($_[0]);
+    }
+
+}
+
+
 sub debug {
     my $level = shift;
     return if !defined($debug);
@@ -2717,7 +2752,7 @@ use re 'taint';
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
-my $VERSION = 0.41;
+my $VERSION = 0.42;
 
 our @ISA = qw(Mail::SpamAssassin::Plugin);
 

@@ -9,7 +9,7 @@ use Data::Dumper;
 my @tests = (
     {
         input  => '<feff0066006900760065>',
-        output => 'five',
+        output => "\x{fe}\x{ff}\x{00}f\x{00}i\x{00}v\x{00}e",
     },{
         input  => '(P.O.\222s and check request forms accepted)',
         output => "P.O.\x{92}s and check request forms accepted",

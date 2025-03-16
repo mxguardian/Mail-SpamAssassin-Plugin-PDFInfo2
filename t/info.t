@@ -100,7 +100,7 @@ my @tests = (
         filename => 't/spam/Encrypted_AESV2.pdf',
         expected => {
             'Protected'    => 0,
-            'Producer' => "iText\xAE 5.5.13.3 \xA92000-2022 iText Group NV (AGPL-version)",
+            'Producer' => "iText® 5.5.13.3 ©2000-2022 iText Group NV (AGPL-version)",
             'ImageArea' => 175000,
             'ImageRatio' => '34.93',
             'Encrypted' => 1,
@@ -114,7 +114,7 @@ my @tests = (
             'Version' => '1.4',
             'ImageCount' => 1,
             'ColorImageCount' => 1,
-            'MD5Fuzzy1' => 'E6CA65D24C5295FABCC8BEF26B47EF8A',
+            'MD5Fuzzy1' => '682B30B0A676C0921E2CD0E0ABE26A40',
             'MD5Fuzzy2' => '6710236FFB511D3C75515BCCB896ADE9',
             'MD5'           => 'B88C417A783E1EFEFC27D3B8065746EA',
             'ModDate' => 'D:20230102151215+01\'00\'',
@@ -143,7 +143,7 @@ my @tests = (
                 'https://forum.itarian.com/' => 1
             },
             'MD5Fuzzy1' => '19B7F3D135D40CC85A67D33A03D855D5',
-            'MD5Fuzzy2' => 'C871FBB29516689D31F03680E4299EE0',
+            'MD5Fuzzy2' => 'F5CD3C450CF4FCE5A28579F619DCE648',
             'MD5'           => '5DEEC7325AD7F1147280B675F0F2ECC1',
             'ImageArea' => 11700,
             'Creator' => '',
@@ -452,7 +452,7 @@ my @tests = (
             'MD5Fuzzy2'       => 'A5082B56AE4451A7781239AE1C2582AF',
             'MD5'           => '2EA71DA1458593ED757FE436D6A28C86',
             'ImageCount'      => 6,
-            'MD5Fuzzy1'       => '75FEC79AD186BCE71D81CF7E3601E67E',
+            'MD5Fuzzy1'       => '803FB5049C9027A9DB0BB43769D9B3B9',
             'ImageRatio'      => '22.47',
             'Version'         => '1.4',
             'ColorImageCount' => 6,
@@ -534,7 +534,7 @@ my @tests = (
             'Trapped' => '/False',
             'Version' => '1.6',
             'ColorImageCount' => 1,
-            'MD5Fuzzy1' => '977E590076127533A5233D4CBDC3AFF7',
+            'MD5Fuzzy1' => 'BC0EB5021A87CC88B832AEE2F8A76221',
             'Producer' => 'Adobe PDF Library 16.0.3',
             'Encrypted' => 0,
             'ImageCount' => 1,
@@ -626,6 +626,37 @@ my @tests = (
             'Title' => '3874-Fiscal Year Expense Statement-18944647-0000-20250131.pdf',
             'Version' => '1.7',
             'uris' => {}
+        }
+    },
+    {
+        filename => 't/spam/Encrypted_AESV3.pdf',
+        expected => {
+            'Author' => '1efxh5-iuj1-z5az-prm3-g1ignw2ynzik',
+            'ClickArea' => 464000,
+            'ClickRatio' => '92.62',
+            'ColorImageCount' => 1,
+            'Creator' => '5msgha-6yor-oax5-pyhp-fpi6jsnemjiw',
+            'Encrypted' => 1,
+            'ImageArea' => 500990,
+            'ImageCount' => 1,
+            'ImageRatio' => '100.00',
+            'JavaScript' => 0,
+            'Keywords' => 'keurfk-u5yp-u5dr-e54r-nhynek44yv2p',
+            'LinkCount' => 1,
+            'MD5' => '5CE8CFC52C67365B7E89C34296CA268E',
+            'MD5Fuzzy1' => 'B9DB5705F07C555FDC724566F60B4FA9',
+            'MD5Fuzzy2' => '86918222C60F39EC601F5256736D9CF3',
+            'OpenAction' => 0,
+            'PageArea' => 500990,
+            'PageCount' => 1,
+            'Producer' => 'iTextSharp™ 5.5.13.3 ©2000-2022 iText Group NV (AGPL-version)',
+            'Protected' => 0,
+            'Subject' => 'cc7zn3-gzzk-vgpq-f5pe-rsxi2mqtk72f',
+            'Title' => 'k4saf2-g5im-ccoj-vvxt-ntsujo4iyqfh',
+            'Version' => '1.5',
+            'uris' => {
+                'https://lovedat.me/?s1=bgs1&userid=uni#SJmpxDc8F9fl0' => 1
+            }
         }
     }
 );

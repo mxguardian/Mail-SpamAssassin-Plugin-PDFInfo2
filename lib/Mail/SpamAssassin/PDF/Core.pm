@@ -1,7 +1,6 @@
 package Mail::SpamAssassin::PDF::Core;
 use strict;
 use warnings FATAL => 'all';
-use Encode qw(from_to decode);
 use Carp;
 use Data::Dumper;
 
@@ -535,13 +534,6 @@ sub _get_string {
         $str = $self->{crypt}->decrypt($str);
     }
 
-    # Convert UTF-16 to UTF-8 and remove BOM
-    if ( $str =~ s/^\xfe\xff// ) {
-        from_to($str,'UTF-16be', 'UTF-8');
-    } elsif ( $str =~ s/^\xff\xfe// ) {
-        from_to($str,'UTF-16le', 'UTF-8');
-    }
-
     return wantarray ? ($str,TYPE_STRING) : $str;
 }
 
@@ -565,11 +557,6 @@ sub _get_hex_string {
         $str = $self->{crypt}->decrypt($str);
     }
 
-    if ( $str =~ s/^\xfe\xff// ) {
-        from_to($str,'UTF-16be', 'UTF-8');
-    } elsif ( $str =~ s/^\xff\xfe// ) {
-        from_to($str,'UTF-16le', 'UTF-8');
-    }
     return  wantarray ? ($str,TYPE_STRING) : $str;
 }
 
