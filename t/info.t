@@ -658,6 +658,31 @@ my @tests = (
                 'https://lovedat.me/?s1=bgs1&userid=uni#SJmpxDc8F9fl0' => 1
             }
         }
+    },
+    {
+        filename => 't/spam/SchemelessURI.pdf',
+        expected => {
+            'ClickArea'       => 10000,
+            'ClickRatio'      => '2.06',
+            'ColorImageCount' => 0,
+            'Encrypted'       => 0,
+            'ImageArea'       => 0,
+            'ImageCount'      => 0,
+            'ImageRatio'      => '0.00',
+            'JavaScript'      => 0,
+            'LinkCount'       => 1,
+            'MD5'             => 'C65071AFB656D9D1A7B34956A45326BB',
+            'MD5Fuzzy1'       => '3BACD85CFBAB4F3205961F45E9B2F22B',
+            'MD5Fuzzy2'       => '655EB3C0A985177BB6BF0D6E5D198A0D',
+            'OpenAction'      => 0,
+            'PageArea'        => 484704,
+            'PageCount'       => 1,
+            'Protected'       => 0,
+            'Version'         => '1.4',
+            'uris' => {
+                'http://example.test' => 1
+            }
+        }
     }
 );
 
