@@ -125,6 +125,40 @@ my @tests = (
         }
     },
     {
+        # R=4/V=4 AESV2 with /EncryptMetadata false. Exercises step 6 of
+        # Algorithm 3.2 (key derivation appends 0xFFFFFFFF). Without it the
+        # empty-password check fails and the file is wrongly flagged Protected.
+        filename => 't/ham/CA_VIN_Verification.pdf',
+        expected => {
+            'Encrypted' => 1,
+            'Protected' => 0,
+            'Version' => '1.6',
+            'Author' => 'CA DMV',
+            'Creator' => 'Adobe InDesign 20.3 (Windows)',
+            'Producer' => 'Adobe PDF Library 17.0',
+            'Title' => 'REG 31, Verification of Vehicle - Not to be completed by applicant',
+            'Subject' => 'Index ready This form is used to perform vehicle verifications not to be completed by applicant.',
+            'Trapped' => '/False',
+            'CreationDate' => 'D:20250602082215-07\'00\'',
+            'ModDate' => 'D:20250604142811-07\'00\'',
+            'PageCount' => 2,
+            'PageArea' => 484704,
+            'ImageCount' => 0,
+            'ColorImageCount' => 0,
+            'ImageArea' => 0,
+            'ImageRatio' => '0.00',
+            'LinkCount' => 0,
+            'uris' => {},
+            'ClickArea' => 0,
+            'ClickRatio' => '0.00',
+            'OpenAction' => 0,
+            'JavaScript' => 0,
+            'MD5' => 'E30D414AE51E90C53E45691874FB5F53',
+            'MD5Fuzzy1' => 'CAC7E4429AFEB98102FBBAC718A2F422',
+            'MD5Fuzzy2' => '59556D668B4C072F3D29DAD4AF013225',
+        }
+    },
+    {
         filename => 't/ham/VectorText.pdf',
         expected => {
             'Protected'    => 0,

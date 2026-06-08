@@ -34,15 +34,20 @@ sub new {
         die "Encryption algorithm $v not implemented";
     }
 
+    # /EncryptMetadata defaults to true when absent
+    my $encrypt_metadata = !defined($encrypt->{'/EncryptMetadata'})
+        || $encrypt->{'/EncryptMetadata'} eq 'true';
+
     my $self = bless {
-        R         => $encrypt->{'/R'},
-        O         => $encrypt->{'/O'},
-        U         => $encrypt->{'/U'},
-        P         => $encrypt->{'/P'},
-        CF        => $encrypt->{'/CF'},
-        V         => $v,
-        ID        => $doc_id,
-        keylength => ($v == 1 ? 40 : $length),
+        R               => $encrypt->{'/R'},
+        O               => $encrypt->{'/O'},
+        U               => $encrypt->{'/U'},
+        P               => $encrypt->{'/P'},
+        CF              => $encrypt->{'/CF'},
+        V               => $v,
+        ID              => $doc_id,
+        EncryptMetadata => $encrypt_metadata,
+        keylength       => ($v == 1 ? 40 : $length),
     }, $class;
 
     if ( $v == 5 ) {
@@ -311,9 +316,9 @@ sub _generate_key {
     # step 5 Pass the first element of the file’s file identifier array
     $md5->add($self->{ID}) if defined($self->{ID});
 
-    # step 6 (Revision 3 only) If document metadata is not being encrypted, pass 4 bytes with
+    # step 6 (Revision 4 or greater) If document metadata is not being encrypted, pass 4 bytes with
     # the value 0xFFFFFFFF to the MD5 hash function
-    # $md5->add(pack('V',0xFFFFFFFF));
+    $md5->add(pack('V',0xFFFFFFFF)) if $self->{R} >= 4 && !$self->{EncryptMetadata};
 
     # step 7 Finish the hash
     my $hash = $md5->digest();
