@@ -8,6 +8,39 @@ use Data::Dumper;
 
 my @tests = (
     {
+        # Pages/Quartz PDF whose link /URI is an indirect reference
+        # (/URI 13 0 R).  Regression guard for indirect /URI dereferencing in
+        # Parser::_parse_action; without it LinkCount is 0 and uris is empty.
+        filename => 't/spam/sample.pdf',
+        expected => {
+            'ClickArea'       => 852,
+            'ClickRatio'      => '0.18',
+            'ColorImageCount' => 0,
+            'CreationDate'    => 'D:20260624044120Z00\'00\'',
+            'Creator'         => 'Pages',
+            'Encrypted'       => 0,
+            'ImageArea'       => 0,
+            'ImageCount'      => 0,
+            'ImageRatio'      => '0.00',
+            'JavaScript'      => 0,
+            'LinkCount'       => 1,
+            'MD5'             => 'D85CF6591A15F37D4C5BA007391AF5AF',
+            'MD5Fuzzy1'       => 'A38E7362C8631E1EE2642D477F71CA33',
+            'MD5Fuzzy2'       => '087B338F50A015479DDF9214CA43E917',
+            'ModDate'         => 'D:20260624044120Z00\'00\'',
+            'OpenAction'      => 0,
+            'PageArea'        => 484704,
+            'PageCount'       => 1,
+            'Producer'        => 'macOS Version 15.3.1 (Build 24D70) Quartz PDFContext',
+            'Protected'       => 0,
+            'Title'           => 'sample',
+            'Version'         => '1.3',
+            'uris' => {
+                'http://www.google.com' => 1
+            },
+        }
+    },
+    {
         filename => 't/ham/North Gaston HS flyer.pdf',
         expected => {
             'Encrypted'    => 0,

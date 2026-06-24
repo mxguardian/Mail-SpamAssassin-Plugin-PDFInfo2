@@ -475,16 +475,19 @@ sub _parse_action {
     return unless defined($action);
 
     if ( $action->{'/S'} eq '/URI' ) {
-        my $location = $action->{'/URI'};
-        if ( $location !~ /^[a-z]+:/i && $location =~ /^[^\s\/?#]+\.[^\s\/?#]+/ ) {
-            # Schemeless URI that looks like a hostname — most viewers
-            # treat these as http://, so normalize for downstream rules.
-            $location = 'http://' . $location;
-        }
-        if ( $location =~ /^[a-z]+:/i ) {
-            $rect = $self->_dereference($rect);
-            $_ = $self->_dereference($_) for (@{$rect});
-            $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
+        # /URI may be given as an indirect reference to a string object
+        my $location = $self->_dereference($action->{'/URI'});
+        if ( defined($location) ) {
+            if ( $location !~ /^[a-z]+:/i && $location =~ /^[^\s\/?#]+\.[^\s\/?#]+/ ) {
+                # Schemeless URI that looks like a hostname — most viewers
+                # treat these as http://, so normalize for downstream rules.
+                $location = 'http://' . $location;
+            }
+            if ( $location =~ /^[a-z]+:/i ) {
+                $rect = $self->_dereference($rect);
+                $_ = $self->_dereference($_) for (@{$rect});
+                $self->{context}->uri($location,$rect,$page) if $self->{context}->can('uri');
+            }
         }
     }
     if ( $action->{'/S'} eq '/JavaScript' ) {
